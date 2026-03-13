@@ -13,11 +13,14 @@ interface ChartProps {
   visibleAccounts: Set<string>;
   viewportStart: number; // index into months array
   viewportEnd: number;
+  hoveredIdx: number | null;
+  onHoverIdx: (idx: number | null) => void;
 }
 
-export function Chart({ result, accounts, scenario, visibleAccounts, viewportStart, viewportEnd }: ChartProps) {
+export function Chart({ result, accounts, scenario, visibleAccounts, viewportStart, viewportEnd, hoveredIdx, onHoverIdx }: ChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const layoutRef = useRef<{ marginLeft: number; marginTop: number; innerHeight: number; step: number } | null>(null);
 
   const visibleMonths = useMemo(
     () => result.months.slice(viewportStart, viewportEnd + 1),
@@ -35,6 +38,8 @@ export function Chart({ result, accounts, scenario, visibleAccounts, viewportSta
     const margin = CHART_MARGIN;
     const width = totalWidth - margin.left - margin.right;
     const height = totalHeight - margin.top - margin.bottom;
+    const viewMonths = viewportEnd - viewportStart + 1;
+    layoutRef.current = { marginLeft: margin.left, marginTop: margin.top, innerHeight: height, step: width / Math.max(viewMonths - 1, 1) };
 
     svg.attr("width", totalWidth).attr("height", totalHeight);
 
@@ -218,26 +223,18 @@ export function Chart({ result, accounts, scenario, visibleAccounts, viewportSta
       .attr("pointer-events", "all");
 
     const tooltip = d3.select(tooltipRef.current);
-    const crosshair = g.append("line")
-      .attr("y1", 0).attr("y2", height)
-      .attr("stroke", "currentColor")
-      .attr("stroke-width", 1)
-      .attr("stroke-dasharray", "4,2")
-      .style("display", "none");
 
     overlay.on("mousemove", (event: MouseEvent) => {
       const [mx] = d3.pointer(event);
-      // Find nearest month
       const domain = xScale.domain();
       const step = width / (domain.length - 1 || 1);
       const idx = Math.round(mx / step);
       const clampedIdx = Math.max(0, Math.min(idx, domain.length - 1));
       const month = domain[clampedIdx];
-      const cx = xScale(month) ?? 0;
-
-      crosshair.attr("x1", cx).attr("x2", cx).style("display", null);
-
       const monthIdx = viewportStart + clampedIdx;
+
+      onHoverIdx(monthIdx);
+
       let total = 0;
       let html = `<div class="font-semibold mb-1">${month}</div>`;
       for (const acc of visibleAccList) {
@@ -260,18 +257,35 @@ export function Chart({ result, accounts, scenario, visibleAccounts, viewportSta
     });
 
     overlay.on("mouseleave", () => {
-      crosshair.style("display", "none");
+      onHoverIdx(null);
       tooltip.style("display", "none");
     });
 
-  }, [result, accounts, visibleAccounts, viewportStart, viewportEnd, scenario]);
+  }, [result, accounts, visibleAccounts, viewportStart, viewportEnd, scenario, onHoverIdx]);
 
   // visibleMonths is used to trigger re-render when viewport changes
   void visibleMonths;
 
+  const crosshairX = (() => {
+    if (hoveredIdx === null || !layoutRef.current) return null;
+    const viewIdx = hoveredIdx - viewportStart;
+    const viewMonths = viewportEnd - viewportStart + 1;
+    if (viewIdx < 0 || viewIdx >= viewMonths) return null;
+    return layoutRef.current.marginLeft + viewIdx * layoutRef.current.step;
+  })();
+
   return (
     <div className="relative w-full h-full">
       <svg ref={svgRef} className="w-full h-full" />
+      {crosshairX !== null && (
+        <svg className="absolute inset-0 w-full h-full pointer-events-none">
+          <line
+            x1={crosshairX} x2={crosshairX}
+            y1={layoutRef.current!.marginTop} y2={layoutRef.current!.marginTop + layoutRef.current!.innerHeight}
+            stroke="currentColor" strokeWidth={1} strokeDasharray="4,2" opacity={0.5}
+          />
+        </svg>
+      )}
       <div
         ref={tooltipRef}
         className="absolute pointer-events-none bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-lg p-2 text-xs z-10"

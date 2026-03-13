@@ -9,6 +9,8 @@ interface TimelineProps {
   viewportStart: number;
   viewportEnd: number;
   onSelectItem: (id: string, type: "account" | "transfer") => void;
+  hoveredIdx: number | null;
+  onHoverIdx: (idx: number | null) => void;
 }
 
 function monthsBetween(a: string, b: string): number {
@@ -26,7 +28,7 @@ function addMonths(date: string, n: number): string {
 }
 
 
-export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd, onSelectItem }: TimelineProps) {
+export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd, onSelectItem, hoveredIdx, onHoverIdx }: TimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const updateAccount = useScenarioStore(s => s.updateAccount);
   const updateTransfer = useScenarioStore(s => s.updateTransfer);
@@ -148,13 +150,33 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
   return (
     <div ref={containerRef} className="relative w-full select-none">
       {/* Bars */}
-      <div className="relative overflow-x-hidden" style={{ height: barsHeight }}>
+      <div
+        className="relative overflow-x-hidden"
+        style={{ height: barsHeight }}
+        onMouseMove={e => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const viewIdx = Math.round(((e.clientX - rect.left) / rect.width) * (viewMonths - 1));
+          onHoverIdx(Math.max(0, Math.min(viewMonths - 1, viewIdx)) + viewportStart);
+        }}
+        onMouseLeave={() => onHoverIdx(null)}
+      >
         {todayPct !== null && (
           <div
             className="absolute top-0 bottom-0 w-px bg-amber-400 opacity-70 pointer-events-none"
             style={{ left: `${todayPct}%` }}
           />
         )}
+        {hoveredIdx !== null && (() => {
+          const viewIdx = hoveredIdx - viewportStart;
+          if (viewIdx < 0 || viewIdx >= viewMonths) return null;
+          const pct = (viewIdx / (viewMonths - 1)) * 100;
+          return (
+            <div
+              className="absolute top-0 bottom-0 w-px bg-current opacity-40 pointer-events-none"
+              style={{ left: `${pct}%` }}
+            />
+          );
+        })()}
       {lanes.map(({ id, type, start, end, lane }) => {
         const startIdx = Math.max(0, monthsBetween(scenario.timelineStart, start) - viewportStart);
         const endIdx = Math.min(viewMonths - 1, monthsBetween(scenario.timelineStart, end) - viewportStart);

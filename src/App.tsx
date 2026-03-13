@@ -40,6 +40,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showAddTransfer, setShowAddTransfer] = useState(false);
   const [visibleAccounts, setVisibleAccounts] = useState<Set<string>>(new Set());
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [viewportStart, setViewportStart] = useState(0);
   const [viewportEnd, setViewportEnd] = useState(0);
   const chartAreaRef = useRef<HTMLDivElement>(null);
@@ -284,6 +285,8 @@ export default function App() {
               visibleAccounts={visibleAccounts}
               viewportStart={safeViewportStart}
               viewportEnd={safeViewportEnd}
+              hoveredIdx={hoveredIdx}
+              onHoverIdx={setHoveredIdx}
             />
           </div>
 
@@ -299,6 +302,8 @@ export default function App() {
               viewportStart={safeViewportStart}
               viewportEnd={safeViewportEnd}
               onSelectItem={(id, type) => selectItem(id, type)}
+              hoveredIdx={hoveredIdx}
+              onHoverIdx={setHoveredIdx}
             />
           </div>
         </div>
