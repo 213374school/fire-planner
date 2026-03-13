@@ -4,6 +4,8 @@ import type { SimulationResult } from "../types";
 import type { Account, Scenario } from "../types";
 import { formatCurrency } from "../utils/formatting";
 
+export const CHART_MARGIN = { top: 20, right: 20, bottom: 40, left: 70 };
+
 interface ChartProps {
   result: SimulationResult;
   accounts: Account[];
@@ -30,7 +32,7 @@ export function Chart({ result, accounts, scenario, visibleAccounts, viewportSta
     const container = svgRef.current.parentElement!;
     const totalWidth = container.clientWidth || 800;
     const totalHeight = container.clientHeight || 400;
-    const margin = { top: 20, right: 20, bottom: 40, left: 70 };
+    const margin = CHART_MARGIN;
     const width = totalWidth - margin.left - margin.right;
     const height = totalHeight - margin.top - margin.bottom;
 

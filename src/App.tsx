@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useScenarioStore } from "./store/scenario";
-import { Chart } from "./components/Chart";
+import { Chart, CHART_MARGIN } from "./components/Chart";
 import { Timeline } from "./components/Timeline";
 import { EditorPanel } from "./components/EditorPanel";
 import { Settings } from "./components/Settings";
@@ -284,8 +284,8 @@ export default function App() {
 
           {/* Timeline */}
           <div
-            className="flex-shrink-0 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 py-2"
-            style={{ minHeight: 80, maxHeight: 200, overflowY: "auto" }}
+            className="flex-shrink-0 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 py-2"
+            style={{ minHeight: 80, maxHeight: 200, overflowY: "auto", paddingLeft: CHART_MARGIN.left + 8, paddingRight: CHART_MARGIN.right + 8 }}
           >
             <Timeline
               scenario={scenario}
