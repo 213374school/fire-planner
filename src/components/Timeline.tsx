@@ -199,12 +199,15 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
         const dragStart = transfer ? transfer.startDate : start;
         const dragEnd = transfer ? transfer.endDate : null;
 
-        // Find source account color for transfers
-        let barColor = "#6b7280";
-        if (type === "account" && acc) barColor = acc.color;
-        if (type === "transfer" && transfer) {
-          const srcAcc = scenario.accounts.find(a => a.id === transfer.sourceAccountId);
-          barColor = srcAcc?.color ?? "#6b7280";
+        const isTransfer = type === "transfer" && !!transfer;
+        let srcColor = "#6b7280";
+        let tgtColor = "#6b7280";
+        if (type === "account" && acc) srcColor = acc.color;
+        if (isTransfer) {
+          const srcAcc = scenario.accounts.find(a => a.id === transfer!.sourceAccountId);
+          const tgtAcc = scenario.accounts.find(a => a.id === transfer!.targetAccountId);
+          srcColor = srcAcc?.color ?? "#6b7280";
+          tgtColor = tgtAcc?.color ?? "#6b7280";
         }
 
         return (
@@ -213,17 +216,64 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
             className={`absolute flex items-center rounded cursor-pointer ${isSelected ? "ring-2 ring-white ring-offset-1" : ""}`}
             style={{
               left: `${leftPct}%`,
-              width: isOneTime ? "8px" : `${Math.max(widthPct, 0.5)}%`,
+              width: isOneTime ? "12px" : `${Math.max(widthPct, 0.5)}%`,
               top,
               height: laneHeight - 4,
-              background: barColor,
+              // Wide transfers: transparent so the gap between the two halves shows the page background
+              background: (isTransfer && !isOneTime && widthPct >= 5) ? "transparent" : srcColor,
               opacity: 0.85,
+              overflow: "hidden",
             }}
             onClick={() => onSelectItem(id, type)}
             onMouseDown={e => !startSnapped && handleDrag(e, id, type, "body", dragStart, dragEnd)}
           >
+            {isTransfer && (
+              <>
+                {(!isOneTime && widthPct >= 5) ? (
+                  // Wide transfer: two separate halves with a real gap in between.
+                  // The outer bar is transparent so the gap reveals the page background.
+                  <>
+                    {/* Left half: srcColor with a > shaped right edge */}
+                    <div style={{
+                      position: "absolute",
+                      left: 0, top: 0, bottom: 0,
+                      width: `calc(50% + ${(laneHeight - 4) / 2}px)`,
+                      background: srcColor,
+                      clipPath: `polygon(0% 0%, calc(100% - ${(laneHeight - 4) / 2}px) 0%, 100% 50%, calc(100% - ${(laneHeight - 4) / 2}px) 100%, 0% 100%)`,
+                      pointerEvents: "none",
+                    }} />
+                    {/* Right half: tgtColor with matching > notch on its left, offset by gap */}
+                    <div style={{
+                      position: "absolute",
+                      left: "50%",
+                      right: 0, top: 0, bottom: 0,
+                      background: tgtColor,
+                      clipPath: `polygon(2px 0%, 100% 0%, 100% 100%, 2px 100%, ${(laneHeight - 4) / 2 + 2}px 50%, 2px 0%)`,
+                      pointerEvents: "none",
+                    }} />
+                  </>
+                ) : (
+                  // Dot / narrow bar: solid srcColor (from bar bg) + tgtColor right half + divider
+                  <>
+                    <div style={{
+                      position: "absolute", left: "50%", right: 0, top: 0, bottom: 0,
+                      background: tgtColor,
+                      pointerEvents: "none",
+                    }} />
+                    <div style={{
+                      position: "absolute",
+                      left: "calc(50% - 1px)",
+                      top: 0, bottom: 0, width: "2px",
+                      background: "rgba(255,255,255,0.7)",
+                      pointerEvents: "none",
+                      zIndex: 2,
+                    }} />
+                  </>
+                )}
+              </>
+            )}
             {!isOneTime && widthPct > 5 && (
-              <span className="text-xs text-white truncate px-1 pointer-events-none">{nameMap[id]}</span>
+              <span className="text-xs text-white truncate px-1 pointer-events-none" style={{ position: "relative", zIndex: 1 }}>{nameMap[id]}</span>
             )}
             {/* Handles — hidden/locked when snapped */}
             {!isOneTime && (
