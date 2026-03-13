@@ -227,7 +227,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
               top,
               height: h,
               background: isTransfer ? "transparent" : srcColor,
-              opacity: 0.85,
+              opacity: isTransfer ? 0.6 : 0.85,
               overflow: "hidden",
             }}
             onClick={() => onSelectItem(id, type)}
@@ -256,7 +256,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
               </>
             )}
             {!isOneTime && widthPct > 5 && (
-              <span className="text-xs text-white truncate px-1 pointer-events-none" style={{ position: "relative", zIndex: 1 }}>{nameMap[id]}</span>
+              <span className={`text-xs text-white truncate px-1 pointer-events-none ${!isTransfer ? "font-bold" : ""}`} style={{ position: "relative", zIndex: 1 }}>{nameMap[id]}</span>
             )}
             {/* Handles — hidden/locked when snapped */}
             {!isOneTime && (
