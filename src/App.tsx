@@ -114,8 +114,10 @@ export default function App() {
     if (!el) return;
 
     const onWheel = (e: WheelEvent) => {
-      // Let the timeline scroll natively
-      if (timelineRef.current?.contains(e.target as Node)) return;
+      const inTimeline = timelineRef.current?.contains(e.target as Node);
+      const isHorizontal = Math.abs(e.deltaX) > Math.abs(e.deltaY);
+      // Vertical scroll over the timeline scrolls the lane list natively
+      if (inTimeline && !isHorizontal && !e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       const { start, end, total } = vpRef.current;
       const viewWidth = end - start;
