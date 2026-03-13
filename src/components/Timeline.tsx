@@ -73,6 +73,9 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
 
   const maxLane = lanes.reduce((m, l) => Math.max(m, l.lane), 0);
   const laneHeight = 24;
+  const h = laneHeight - 4;         // bar height = 20px
+  const arrowTip = h / 2;           // = 10px — width of the chevron point
+  const minCompactWidth = (h + arrowTip * 2 + 8) / 2; // enough to show both color halves clearly
   const barsHeight = (maxLane + 1) * laneHeight + 8;
 
   const handleDrag = useCallback((
@@ -178,11 +181,13 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
           );
         })()}
       {lanes.map(({ id, type, start, end, lane }) => {
-        const startIdx = Math.max(0, monthsBetween(scenario.timelineStart, start) - viewportStart);
+        const rawStartIdx = monthsBetween(scenario.timelineStart, start) - viewportStart;
+        const startIdx = Math.max(0, rawStartIdx);
         const endIdx = Math.min(viewMonths - 1, monthsBetween(scenario.timelineStart, end) - viewportStart);
         const leftPct = (startIdx / (viewMonths - 1)) * 100;
         const rightPct = (endIdx / (viewMonths - 1)) * 100;
         const widthPct = rightPct - leftPct;
+        const stuckRight = type === "transfer" && rawStartIdx > viewMonths - 1;
 
         const acc = scenario.accounts.find(a => a.id === id);
         const transfer = scenario.transfers.find(t => t.id === id);
@@ -200,6 +205,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
         const dragEnd = transfer ? transfer.endDate : null;
 
         const isTransfer = type === "transfer" && !!transfer;
+
         let srcColor = "#6b7280";
         let tgtColor = "#6b7280";
         if (type === "account" && acc) srcColor = acc.color;
@@ -215,12 +221,12 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
             key={id}
             className={`absolute flex items-center rounded cursor-pointer ${isSelected ? "ring-2 ring-white ring-offset-1" : ""}`}
             style={{
-              left: `${leftPct}%`,
-              width: isOneTime ? "12px" : `${Math.max(widthPct, 0.5)}%`,
+              left: stuckRight ? `calc(100% - ${minCompactWidth}px)` : `${leftPct}%`,
+              width: isTransfer ? (isOneTime ? 0 : `${widthPct}%`) : `${Math.max(widthPct, 0.5)}%`,
+              minWidth: isTransfer ? `${minCompactWidth}px` : undefined,
               top,
-              height: laneHeight - 4,
-              // Wide transfers: transparent so the gap between the two halves shows the page background
-              background: (isTransfer && !isOneTime && widthPct >= 5) ? "transparent" : srcColor,
+              height: h,
+              background: isTransfer ? "transparent" : srcColor,
               opacity: 0.85,
               overflow: "hidden",
             }}
@@ -229,47 +235,24 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
           >
             {isTransfer && (
               <>
-                {(!isOneTime && widthPct >= 5) ? (
-                  // Wide transfer: two separate halves with a real gap in between.
-                  // The outer bar is transparent so the gap reveals the page background.
-                  <>
-                    {/* Left half: srcColor with a > shaped right edge */}
-                    <div style={{
-                      position: "absolute",
-                      left: 0, top: 0, bottom: 0,
-                      width: `calc(50% + ${(laneHeight - 4) / 2}px)`,
-                      background: srcColor,
-                      clipPath: `polygon(0% 0%, calc(100% - ${(laneHeight - 4) / 2}px) 0%, 100% 50%, calc(100% - ${(laneHeight - 4) / 2}px) 100%, 0% 100%)`,
-                      pointerEvents: "none",
-                    }} />
-                    {/* Right half: tgtColor with matching > notch on its left, offset by gap */}
-                    <div style={{
-                      position: "absolute",
-                      left: "50%",
-                      right: 0, top: 0, bottom: 0,
-                      background: tgtColor,
-                      clipPath: `polygon(2px 0%, 100% 0%, 100% 100%, 2px 100%, ${(laneHeight - 4) / 2 + 2}px 50%, 2px 0%)`,
-                      pointerEvents: "none",
-                    }} />
-                  </>
-                ) : (
-                  // Dot / narrow bar: solid srcColor (from bar bg) + tgtColor right half + divider
-                  <>
-                    <div style={{
-                      position: "absolute", left: "50%", right: 0, top: 0, bottom: 0,
-                      background: tgtColor,
-                      pointerEvents: "none",
-                    }} />
-                    <div style={{
-                      position: "absolute",
-                      left: "calc(50% - 1px)",
-                      top: 0, bottom: 0, width: "2px",
-                      background: "rgba(255,255,255,0.7)",
-                      pointerEvents: "none",
-                      zIndex: 2,
-                    }} />
-                  </>
-                )}
+                {/* Left (src) section: tip at splitOffset past center, making straight src = straight tgt */}
+                <div style={{
+                  position: "absolute",
+                  left: 0, top: 0, bottom: 0,
+                  width: `calc(50% + ${(arrowTip - 2) / 2}px)`,
+                  background: srcColor,
+                  clipPath: `polygon(0% 0%, calc(100% - ${arrowTip}px) 0%, 100% 50%, calc(100% - ${arrowTip}px) 100%, 0% 100%)`,
+                  pointerEvents: "none",
+                }} />
+                {/* Right (tgt) section: notch aligns with the src tip */}
+                <div style={{
+                  position: "absolute",
+                  left: `calc(50% - ${(arrowTip + 2) / 2}px)`,
+                  right: 0, top: 0, bottom: 0,
+                  background: tgtColor,
+                  clipPath: `polygon(2px 0%, 100% 0%, 100% 100%, 2px 100%, ${arrowTip + 2}px 50%, 2px 0%)`,
+                  pointerEvents: "none",
+                }} />
               </>
             )}
             {!isOneTime && widthPct > 5 && (
