@@ -36,7 +36,7 @@ export interface ItemEdge { itemId: string; edge: EdgeId; }
 export interface TimeAnchor {
   id: string;
   date: string;       // YYYY-MM — shared date for all connected edges
-  edges: ItemEdge[];  // length >= 2 for user anchors; fixed anchors may have fewer
+  edges: ItemEdge[];  // length >= 1 for user anchors; fixed anchors may have fewer
   fixed?: boolean;    // true for the two permanent timeline-start/end anchors
 }
 

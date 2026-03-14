@@ -82,7 +82,30 @@ function ensureFixedAnchors(scenario: Scenario): Scenario {
 function removeAnchorsForItem(anchors: TimeAnchor[] | undefined, itemId: string): TimeAnchor[] {
   return (anchors ?? [])
     .map(a => ({ ...a, edges: a.edges.filter(e => e.itemId !== itemId) }))
-    .filter(a => a.fixed || a.edges.length >= 2);
+    .filter(a => a.fixed || a.edges.length >= 1);
+}
+
+/** Ensures every item edge (account start, transfer start, transfer end) has at least one anchor. */
+function ensureSingleEdgeAnchors(scenario: Scenario): Scenario {
+  const anchors = scenario.anchors ?? [];
+  const covered = new Set<string>();
+  for (const a of anchors)
+    for (const e of a.edges)
+      covered.add(`${e.itemId}:${e.edge}`);
+
+  const newAnchors: TimeAnchor[] = [];
+  for (const acc of scenario.accounts) {
+    if (!covered.has(`${acc.id}:start`))
+      newAnchors.push({ id: generateId(), date: acc.startDate, edges: [{ itemId: acc.id, edge: "start" }] });
+  }
+  for (const t of scenario.transfers) {
+    if (!covered.has(`${t.id}:start`))
+      newAnchors.push({ id: generateId(), date: t.startDate, edges: [{ itemId: t.id, edge: "start" }] });
+    if (t.endDate !== null && !covered.has(`${t.id}:end`))
+      newAnchors.push({ id: generateId(), date: t.endDate, edges: [{ itemId: t.id, edge: "end" }] });
+  }
+  if (newAnchors.length === 0) return scenario;
+  return { ...scenario, anchors: [...anchors, ...newAnchors] };
 }
 
 function syncAnchorDates(anchors: TimeAnchor[] | undefined, scenario: Scenario): TimeAnchor[] {
@@ -188,11 +211,11 @@ export const useScenarioStore = create<ScenarioStore>()(
             growthRate: 0.04,
             growthPeriod: "yearly",
           };
-          const updated: Scenario = {
+          const updated: Scenario = ensureSingleEdgeAnchors({
             ...scenario,
             accounts: [...scenario.accounts, newAcc],
             updatedAt: currentMonth(),
-          };
+          });
           const scenarios = { ...state.scenarios, [state.activeScenarioId]: updated };
           return {
             scenarios,
@@ -275,11 +298,11 @@ export const useScenarioStore = create<ScenarioStore>()(
             taxRate: 0,
             taxBasis: "full",
           };
-          const updated: Scenario = {
+          const updated: Scenario = ensureSingleEdgeAnchors({
             ...scenario,
             transfers: [...scenario.transfers, newT],
             updatedAt: currentMonth(),
-          };
+          });
           const scenarios = { ...state.scenarios, [state.activeScenarioId]: updated };
           return {
             scenarios,
@@ -294,10 +317,18 @@ export const useScenarioStore = create<ScenarioStore>()(
         set(state => {
           if (!state.activeScenarioId) return state;
           const scenario = state.scenarios[state.activeScenarioId];
+          // If endDate is being cleared, remove any end-edge anchors for this transfer first
+          let baseAnchors = scenario.anchors ?? [];
+          const oldTransfer = scenario.transfers.find(t => t.id === id);
+          if (oldTransfer?.endDate !== null && updates.endDate === null) {
+            baseAnchors = baseAnchors
+              .map(a => ({ ...a, edges: a.edges.filter(e => !(e.itemId === id && e.edge === "end")) }))
+              .filter(a => a.fixed || a.edges.length >= 1);
+          }
           const transfers = scenario.transfers.map(t => t.id === id ? { ...t, ...updates } : t);
-          const newScenario: Scenario = { ...scenario, transfers, updatedAt: currentMonth() };
-          const anchors = syncAnchorDates(newScenario.anchors, newScenario);
-          const finalScenario = { ...newScenario, anchors };
+          const newScenario: Scenario = { ...scenario, transfers, anchors: baseAnchors, updatedAt: currentMonth() };
+          const synced = syncAnchorDates(newScenario.anchors, newScenario);
+          const finalScenario = ensureSingleEdgeAnchors({ ...newScenario, anchors: synced });
           const scenarios = { ...state.scenarios, [state.activeScenarioId]: finalScenario };
           return { scenarios, simulationResult: recompute(scenarios, state.activeScenarioId) };
         });
@@ -421,7 +452,7 @@ export const useScenarioStore = create<ScenarioStore>()(
       onRehydrateStorage: () => (state) => {
         if (state) {
           state.scenarios = Object.fromEntries(
-            Object.entries(state.scenarios).map(([id, s]) => [id, ensureFixedAnchors(s)])
+            Object.entries(state.scenarios).map(([id, s]) => [id, ensureSingleEdgeAnchors(ensureFixedAnchors(s))])
           );
           state.simulationResult = recompute(state.scenarios, state.activeScenarioId);
         }

@@ -108,12 +108,35 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
     const containerWidth = container.clientWidth;
     const startX = e.clientX;
     const originalDate = anchor.date;
+    const ANCHOR_MAGNET_PX = 15;
+
+    const mergeTargetRef = { current: null as TimeAnchor | null };
+    let highlightedAnchorEl: HTMLElement | null = null;
+
+    function clearAnchorHighlight() {
+      if (highlightedAnchorEl) {
+        highlightedAnchorEl.classList.remove("anchor-candidate-highlight");
+        highlightedAnchorEl = null;
+      }
+    }
 
     const onMouseMove = (ev: MouseEvent) => {
       const dx = ev.clientX - startX;
       const monthDelta = Math.round((dx / containerWidth) * viewMonths);
       const rawDate = addMonths(originalDate, monthDelta);
-      const clamped = computeAnchorDragTarget(scenario, anchor, rawDate);
+      let clamped = computeAnchorDragTarget(scenario, anchor, rawDate);
+
+      // Detect nearby anchor for merge
+      clearAnchorHighlight();
+      mergeTargetRef.current = null;
+      const thresholdMonths = (ANCHOR_MAGNET_PX / containerWidth) * viewMonths;
+      const nearestOther = findNearestAnchor(anchors, clamped, anchor.id, thresholdMonths);
+      if (nearestOther) {
+        mergeTargetRef.current = nearestOther;
+        clamped = nearestOther.date;
+        const el = document.querySelector<HTMLElement>(`[data-anchor-id="${nearestOther.id}"] > div:first-child`);
+        if (el) { el.classList.add("anchor-candidate-highlight"); highlightedAnchorEl = el; }
+      }
 
       const accountUpdates: { id: string; changes: Partial<import("../types").Account> }[] = [];
       const transferUpdates: { id: string; changes: Partial<import("../types").Transfer> }[] = [];
@@ -137,11 +160,23 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
     const onMouseUp = () => {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
+      clearAnchorHighlight();
+
+      const mergeTarget = mergeTargetRef.current;
+      mergeTargetRef.current = null;
+      if (mergeTarget) {
+        const mergedEdges = [...mergeTarget.edges];
+        for (const edge of anchor.edges) {
+          if (!mergedEdges.some(e => e.itemId === edge.itemId && e.edge === edge.edge))
+            mergedEdges.push(edge);
+        }
+        applyDragUpdate([], [], [anchor.id], [{ ...mergeTarget, edges: mergedEdges }]);
+      }
     };
 
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
-  }, [viewMonths, scenario, applyDragUpdate]);
+  }, [viewMonths, scenario, applyDragUpdate, anchors]);
 
   const handleDrag = useCallback((
     e: React.MouseEvent,
@@ -164,6 +199,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
 
     // Track drag target for edge drag
     const dragTargetRef = { current: null as DragTarget | null };
+    let lastClampedDate = draggedEdge === "start" ? originalStart : (originalEnd ?? scenario.timelineEnd);
     let hasDragged = false;
     const MIN_DRAG_PX = 4;
     let highlightedEl: HTMLElement | null = null;
@@ -231,6 +267,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
 
         // --- Apply single-item update ---
         const clampedDate = computeEdgeDragTargetSimple(scenario, id, draggedEdge, candidateDate);
+        lastClampedDate = clampedDate;
         const accountUpdates: { id: string; changes: Partial<import("../types").Account> }[] = [];
         const transferUpdates: { id: string; changes: Partial<import("../types").Transfer> }[] = [];
 
@@ -278,7 +315,17 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
           }
         }
 
-        applyDragUpdate(accountUpdates, transferUpdates, [], []);
+        // Update single-edge anchors that belong only to this item so they follow in real-time
+        const singleAnchorUpdates: TimeAnchor[] = [];
+        for (const anch of anchors) {
+          if (!anch.fixed && anch.edges.length === 1 && anch.edges[0].itemId === id) {
+            const newDate = anch.edges[0].edge === "start"
+              ? addMonths(originalStart, delta)
+              : (originalEnd ? addMonths(originalEnd, delta) : anch.date);
+            singleAnchorUpdates.push({ ...anch, date: newDate });
+          }
+        }
+        applyDragUpdate(accountUpdates, transferUpdates, [], singleAnchorUpdates);
       }
     };
 
@@ -306,7 +353,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
           // Disconnect from old anchor
           if (myAnchor) {
             const stripped = removeEdgeFromAnchor(myAnchor, id, draggedEdge);
-            if (!myAnchor.fixed && stripped.edges.length < 2) {
+            if (!myAnchor.fixed && stripped.edges.length < 1) {
               anchorsToRemove.push(myAnchor.id);
             } else {
               anchorsToUpdate.push(stripped);
@@ -315,7 +362,12 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
 
           // Connect to new target
           if (snap === null) {
-            // Free drop — done
+            // Free drop — create single-edge anchor at current position
+            anchorsToUpdate.push({
+              id: generateId(),
+              date: lastClampedDate,
+              edges: [{ itemId: id, edge: draggedEdge }],
+            });
           } else if (snap.type === "anchor") {
             anchorsToUpdate.push(addEdgeToAnchor(snap.anchor, { itemId: id, edge: draggedEdge }));
           } else if (snap.existingAnchorId === null) {
@@ -345,8 +397,9 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
 
         for (const anchor of anchors) {
           if (!anchor.edges.some(e => e.itemId === id)) continue;
+          if (!anchor.fixed && anchor.edges.length === 1) continue; // single-edge anchor already followed in real-time
           const newEdges = anchor.edges.filter(e => e.itemId !== id);
-          if (!anchor.fixed && newEdges.length < 2) {
+          if (!anchor.fixed && newEdges.length < 1) {
             anchorsToRemove.push(anchor.id);
           } else {
             anchorsToUpdate.push({ ...anchor, edges: newEdges });

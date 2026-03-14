@@ -102,8 +102,8 @@ function validateTimeAnchor(data: unknown, itemIds: Set<string>): ValidationResu
     return { valid: false, error: "TimeAnchor date must be YYYY-MM" };
   }
   const isFixed = d["fixed"] === true;
-  if (!Array.isArray(d["edges"]) || (!isFixed && d["edges"].length < 2)) {
-    return { valid: false, error: "TimeAnchor edges must be an array with length >= 2" };
+  if (!Array.isArray(d["edges"]) || (!isFixed && d["edges"].length < 1)) {
+    return { valid: false, error: "TimeAnchor edges must be an array with length >= 1" };
   }
   for (const edge of d["edges"] as unknown[]) {
     if (typeof edge !== "object" || edge === null) return { valid: false, error: "TimeAnchor edge is not an object" };
