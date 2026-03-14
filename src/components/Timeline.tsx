@@ -38,7 +38,6 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
   const applyDragUpdate = useScenarioStore(s => s.applyDragUpdate);
   const addAnchor = useScenarioStore(s => s.addAnchor);
   const updateAnchor = useScenarioStore(s => s.updateAnchor);
-  const removeAnchor = useScenarioStore(s => s.removeAnchor);
   const anchors = scenario.anchors ?? [];
 
   const viewMonths = viewportEnd - viewportStart + 1;
@@ -204,13 +203,11 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
     let hasDragged = false;
     const MIN_DRAG_PX = 4;
     let highlightedEl: HTMLElement | null = null;
-    let highlightedClass = "";
 
     function clearHighlight() {
       if (highlightedEl) {
-        highlightedEl.classList.remove(highlightedClass);
+        highlightedEl.classList.remove("anchor-candidate-highlight");
         highlightedEl = null;
-        highlightedClass = "";
       }
     }
 
@@ -252,18 +249,10 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
           if (el) {
             el.classList.add("anchor-candidate-highlight");
             highlightedEl = el;
-            highlightedClass = "anchor-candidate-highlight";
           }
         } else if (nearestEdge) {
           dragTargetRef.current = { type: "edge", itemId: nearestEdge.itemId, edge: nearestEdge.edge, existingAnchorId: nearestEdge.existingAnchorId };
           candidateDate = resolveEdgeDate(scenario, nearestEdge.itemId, nearestEdge.edge);
-          // Highlight edge handle
-          const el = document.querySelector<HTMLElement>(`[data-edge-id="${nearestEdge.itemId}-${nearestEdge.edge}"]`);
-          if (el) {
-            el.classList.add("edge-candidate-highlight");
-            highlightedEl = el;
-            highlightedClass = "edge-candidate-highlight";
-          }
         }
 
         // --- Apply single-item update ---
@@ -466,7 +455,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
 
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
-  }, [viewMonths, scenario, applyDragUpdate, addAnchor, updateAnchor, removeAnchor, anchors, lanes]);
+  }, [viewMonths, scenario, applyDragUpdate, addAnchor, updateAnchor, anchors, lanes]);
 
   const nameMap = Object.fromEntries([
     ...scenario.accounts.map(a => [a.id, a.name]),
@@ -486,11 +475,6 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
     <div ref={containerRef} className="relative w-full select-none">
       {/* Highlight styles */}
       <style>{`
-        .edge-candidate-highlight {
-          box-shadow: 0 0 0 2px #facc15, 0 0 8px 2px #fde68a;
-          border-radius: 2px;
-          z-index: 20 !important;
-        }
         .anchor-candidate-highlight {
           background: rgba(99,202,183,1) !important;
           opacity: 1 !important;
@@ -541,7 +525,6 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
               className={`absolute top-0 bottom-0 ${isFixed ? "cursor-default" : "cursor-ew-resize"}`}
               style={{ left: `${pct}%`, width: 9, transform: "translateX(-4px)", zIndex: 1 }}
               onMouseDown={isFixed ? undefined : e => handleAnchorDrag(e, anchor)}
-              onDoubleClick={isFixed ? undefined : e => { e.stopPropagation(); removeAnchor(anchor.id); }}
             >
               {/* 1px visual line centered in hit area */}
               <div
