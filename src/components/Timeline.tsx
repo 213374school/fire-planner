@@ -41,7 +41,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
   function assignLane(startDate: string, endDate: string, minLane = 0): number {
     for (let lane = minLane; ; lane++) {
       const occupied = lanes.filter(l => l.lane === lane);
-      const overlaps = occupied.some(l => startDate <= l.end && endDate >= l.start);
+      const overlaps = occupied.some(l => startDate < l.end && endDate > l.start);
       if (!overlaps) return lane;
     }
   }
@@ -208,12 +208,14 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
 
         let srcColor = "#6b7280";
         let tgtColor = "#6b7280";
+        let tgtName: string | undefined;
         if (type === "account" && acc) srcColor = acc.color;
         if (isTransfer) {
           const srcAcc = scenario.accounts.find(a => a.id === transfer!.sourceAccountId);
           const tgtAcc = scenario.accounts.find(a => a.id === transfer!.targetAccountId);
           srcColor = srcAcc?.color ?? "#6b7280";
           tgtColor = tgtAcc?.color ?? "#6b7280";
+          tgtName = tgtAcc?.name;
         }
 
         return (
@@ -221,9 +223,9 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
             key={id}
             className={`absolute flex items-center rounded cursor-pointer ${isSelected ? "ring-2 ring-white ring-offset-1" : ""}`}
             style={{
-              left: stuckRight ? `calc(100% - ${minCompactWidth}px)` : `${leftPct}%`,
-              width: isTransfer ? (isOneTime ? 0 : `${widthPct}%`) : `${Math.max(widthPct, 0.5)}%`,
-              minWidth: isTransfer ? `${minCompactWidth}px` : undefined,
+              left: stuckRight ? `calc(100% - ${minCompactWidth - 1}px)` : `calc(${leftPct}% + 1px)`,
+              width: isTransfer ? (isOneTime ? 0 : `calc(${widthPct}% - 2px)`) : `calc(${Math.max(widthPct, 0.5)}% - 2px)`,
+              minWidth: isTransfer ? `${minCompactWidth - 2}px` : undefined,
               top,
               height: h,
               background: isTransfer ? "transparent" : srcColor,
@@ -257,6 +259,9 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
             )}
             {!isOneTime && widthPct > 5 && (
               <span className={`text-xs text-white truncate px-1 pointer-events-none ${!isTransfer ? "font-bold" : ""}`} style={{ position: "relative", zIndex: 1 }}>{nameMap[id]}</span>
+            )}
+            {isTransfer && !isOneTime && widthPct > 5 && tgtName && (
+              <span className="absolute right-1 text-xs text-white pointer-events-none" style={{ zIndex: 1 }}>{tgtName}</span>
             )}
             {/* Handles — hidden/locked when snapped */}
             {!isOneTime && (
