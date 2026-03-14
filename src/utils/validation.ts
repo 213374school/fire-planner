@@ -65,11 +65,9 @@ export function validateScenario(data: unknown): ValidationResult {
 function validateAccount(data: unknown): ValidationResult {
   if (typeof data !== "object" || data === null) return { valid: false, error: "Account is not an object" };
   const d = data as Record<string, unknown>;
-  const required = ["id", "name", "color", "startDate"];
-  for (const k of required) {
+  for (const k of ["id", "name", "color"]) {
     if (typeof d[k] !== "string") return { valid: false, error: `Account missing field: ${k}` };
   }
-  if (!isValidYYYYMM(d["startDate"] as string)) return { valid: false, error: "Account startDate must be YYYY-MM" };
   if (typeof d["initialBalance"] !== "number") return { valid: false, error: "Account missing initialBalance" };
   if (typeof d["growthRate"] !== "number") return { valid: false, error: "Account missing growthRate" };
   return { valid: true };

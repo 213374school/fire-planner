@@ -85,7 +85,7 @@ function removeAnchorsForItem(anchors: TimeAnchor[] | undefined, itemId: string)
     .filter(a => a.fixed || a.edges.length >= 1);
 }
 
-/** Ensures every item edge (account start, transfer start, transfer end) has at least one anchor. */
+/** Ensures every transfer edge (start, end) has at least one anchor. */
 function ensureSingleEdgeAnchors(scenario: Scenario): Scenario {
   const anchors = scenario.anchors ?? [];
   const covered = new Set<string>();
@@ -94,10 +94,6 @@ function ensureSingleEdgeAnchors(scenario: Scenario): Scenario {
       covered.add(`${e.itemId}:${e.edge}`);
 
   const newAnchors: TimeAnchor[] = [];
-  for (const acc of scenario.accounts) {
-    if (!covered.has(`${acc.id}:start`))
-      newAnchors.push({ id: generateId(), date: acc.startDate, edges: [{ itemId: acc.id, edge: "start" }] });
-  }
   for (const t of scenario.transfers) {
     if (!covered.has(`${t.id}:start`))
       newAnchors.push({ id: generateId(), date: t.startDate, edges: [{ itemId: t.id, edge: "start" }] });
@@ -206,7 +202,6 @@ export const useScenarioStore = create<ScenarioStore>()(
             id: generateId(),
             name: `Account ${count + 1}`,
             color: COLORS[count % COLORS.length],
-            startDate: currentMonth(),
             initialBalance: 10000,
             growthRate: 0.04,
             growthPeriod: "yearly",
@@ -231,25 +226,8 @@ export const useScenarioStore = create<ScenarioStore>()(
           if (!state.activeScenarioId) return state;
           const scenario = state.scenarios[state.activeScenarioId];
           const accounts = scenario.accounts.map(a => a.id === id ? { ...a, ...updates } : a);
-
-          // Clamp literal transfer dates to their accounts' start ranges
-          const transfers = scenario.transfers.map(t => {
-            if (t.sourceAccountId !== id && t.targetAccountId !== id) return t;
-            const srcAcc = t.sourceAccountId ? accounts.find(a => a.id === t.sourceAccountId) : null;
-            const tgtAcc = t.targetAccountId ? accounts.find(a => a.id === t.targetAccountId) : null;
-            const candidates = [srcAcc, tgtAcc].filter(Boolean).map(a => a!.startDate);
-            const minStart = candidates.reduce((a, b) => a > b ? a : b, scenario.timelineStart);
-            const clampedStart = t.startDate < minStart ? minStart : t.startDate;
-            const clampedEnd = (t.endDate && t.endDate < minStart) ? minStart : t.endDate;
-            return (clampedStart !== t.startDate || clampedEnd !== t.endDate)
-              ? { ...t, startDate: clampedStart, endDate: clampedEnd }
-              : t;
-          });
-
-          const newScenario: Scenario = { ...scenario, accounts, transfers, updatedAt: currentMonth() };
-          const anchors = syncAnchorDates(newScenario.anchors, newScenario);
-          const finalScenario = { ...newScenario, anchors };
-          const scenarios = { ...state.scenarios, [state.activeScenarioId]: finalScenario };
+          const newScenario: Scenario = { ...scenario, accounts, updatedAt: currentMonth() };
+          const scenarios = { ...state.scenarios, [state.activeScenarioId]: newScenario };
           return { scenarios, simulationResult: recompute(scenarios, state.activeScenarioId) };
         });
       },
@@ -452,7 +430,14 @@ export const useScenarioStore = create<ScenarioStore>()(
       onRehydrateStorage: () => (state) => {
         if (state) {
           state.scenarios = Object.fromEntries(
-            Object.entries(state.scenarios).map(([id, s]) => [id, ensureSingleEdgeAnchors(ensureFixedAnchors(s))])
+            Object.entries(state.scenarios).map(([id, s]) => {
+              // Migration: strip account edges from anchors (accounts are now omnipresent)
+              const accountIds = new Set(s.accounts.map(a => a.id));
+              const migratedAnchors = (s.anchors ?? [])
+                .map(a => ({ ...a, edges: a.edges.filter(e => !accountIds.has(e.itemId)) }))
+                .filter(a => a.fixed || a.edges.length >= 1);
+              return [id, ensureSingleEdgeAnchors(ensureFixedAnchors({ ...s, anchors: migratedAnchors }))];
+            })
           );
           state.simulationResult = recompute(state.scenarios, state.activeScenarioId);
         }

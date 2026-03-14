@@ -55,15 +55,6 @@ export function AccountEditor({ account }: Props) {
         />
       </Field>
 
-      <Field label="Start Date">
-        <input
-          type="month"
-          value={account.startDate}
-          onChange={e => update("startDate", e.target.value)}
-          className="input"
-        />
-      </Field>
-
       <Field label="Initial Balance">
         <input
           type="number"

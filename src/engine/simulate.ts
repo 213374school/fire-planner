@@ -50,24 +50,14 @@ export function runSimulation(scenario: Scenario): SimulationResult {
   const balance: Record<string, number> = {};
   const principal: Record<string, number> = {};
 
-  // Initialize accounts that start at or before timelineStart
+  // All accounts are active from timelineStart
   for (const acc of accounts) {
-    if (acc.startDate <= timelineStart) {
-      balance[acc.id] = acc.initialBalance;
-      principal[acc.id] = acc.initialBalance;
-    }
+    balance[acc.id] = acc.initialBalance;
+    principal[acc.id] = acc.initialBalance;
   }
 
   for (let i = 0; i < totalMonths; i++) {
     const M = months[i];
-
-    // Initialize any accounts that start this month
-    for (const acc of accounts) {
-      if (acc.startDate === M && !(acc.id in balance)) {
-        balance[acc.id] = acc.initialBalance;
-        principal[acc.id] = acc.initialBalance;
-      }
-    }
 
     // Snapshots at start of month
     const snapshot: Record<string, number> = { ...balance };
@@ -159,7 +149,7 @@ export function runSimulation(scenario: Scenario): SimulationResult {
     for (const acc of accounts) {
       if (!(acc.id in balance)) continue;
       const N = periodToMonths(acc.growthPeriod);
-      const monthsFromStart = monthsBetween(acc.startDate, M);
+      const monthsFromStart = monthsBetween(timelineStart, M);
       if (monthsFromStart >= 0 && monthsFromStart % N === 0) {
         const rate = periodRate(acc.growthRate, N);
         const delta = snapshot[acc.id] * rate;
@@ -218,13 +208,9 @@ function isTransferActive(t: Transfer, M: string, accounts: Account[], timelineS
     if (diff % N !== 0) return false;
   }
 
-  // Check source and target accounts have started (null = external, always valid)
-  const srcAcc = t.sourceAccountId ? accounts.find(a => a.id === t.sourceAccountId) : null;
-  const tgtAcc = t.targetAccountId ? accounts.find(a => a.id === t.targetAccountId) : null;
-  if (t.sourceAccountId && !srcAcc) return false;
-  if (t.targetAccountId && !tgtAcc) return false;
-  if (srcAcc && M < srcAcc.startDate) return false;
-  if (tgtAcc && M < tgtAcc.startDate) return false;
+  // Check source and target accounts exist (null = external, always valid)
+  if (t.sourceAccountId && !accounts.find(a => a.id === t.sourceAccountId)) return false;
+  if (t.targetAccountId && !accounts.find(a => a.id === t.targetAccountId)) return false;
 
   return true;
 }

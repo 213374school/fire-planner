@@ -31,7 +31,6 @@ export function makeDefaultAccount(existingCount: number = 0): Account {
     id: generateId(),
     name: `Account ${existingCount + 1}`,
     color: ACCOUNT_COLORS[existingCount % ACCOUNT_COLORS.length],
-    startDate: currentMonth(),
     initialBalance: 0,
     growthRate: 0.04,
     growthPeriod: "yearly",

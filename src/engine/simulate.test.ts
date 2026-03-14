@@ -25,7 +25,6 @@ function makeAccount(overrides: Partial<Account> = {}): Account {
     id: "acc1",
     name: "Test Account",
     color: "#4f46e5",
-    startDate: "2024-01",
     initialBalance: 10000,
     growthRate: 0,
     growthPeriod: "yearly",
@@ -124,7 +123,7 @@ describe("Case 4: Gains-fraction tax", () => {
     });
     // After month 0 (2024-01), growth fires: delta = 10000 * 0.5 = 5000, balance = 15000, principal = 10000
     // In 2024-02, no growth (offset 1 % 12 != 0), only transfer fires
-    const accB = makeAccount({ id: "acc2", initialBalance: 0, growthRate: 0, growthPeriod: "yearly", startDate: "2024-02" });
+    const accB = makeAccount({ id: "acc2", initialBalance: 0, growthRate: 0, growthPeriod: "yearly" });
     const transfer = makeTransfer({
       sourceAccountId: "acc1",
       targetAccountId: "acc2",

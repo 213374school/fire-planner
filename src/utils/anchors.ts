@@ -18,7 +18,7 @@ export function addMonths(date: string, n: number): string {
 export function resolveEdgeDate(scenario: Scenario, itemId: string, edge: EdgeId): string {
   const acc = scenario.accounts.find(a => a.id === itemId);
   if (acc) {
-    return edge === "start" ? acc.startDate : scenario.timelineEnd;
+    return edge === "start" ? scenario.timelineStart : scenario.timelineEnd;
   }
   const t = scenario.transfers.find(t => t.id === itemId);
   if (!t) return scenario.timelineStart;
@@ -26,22 +26,9 @@ export function resolveEdgeDate(scenario: Scenario, itemId: string, edge: EdgeId
   return t.endDate ?? scenario.timelineEnd;
 }
 
-/** Returns minimum allowed start for an item (account or transfer). */
-export function getItemMinStart(scenario: Scenario, itemId: string): string {
-  const acc = scenario.accounts.find(a => a.id === itemId);
-  if (acc) return scenario.timelineStart;
-  const t = scenario.transfers.find(t => t.id === itemId);
-  if (!t) return scenario.timelineStart;
-  const dates: string[] = [];
-  if (t.sourceAccountId) {
-    const a = scenario.accounts.find(a => a.id === t.sourceAccountId);
-    if (a) dates.push(a.startDate);
-  }
-  if (t.targetAccountId) {
-    const a = scenario.accounts.find(a => a.id === t.targetAccountId);
-    if (a) dates.push(a.startDate);
-  }
-  return dates.reduce((a, b) => a > b ? a : b, scenario.timelineStart);
+/** Returns minimum allowed start for a transfer (accounts are always omnipresent). */
+export function getItemMinStart(scenario: Scenario, _itemId: string): string {
+  return scenario.timelineStart;
 }
 
 /** Which anchor owns this edge (if any). */
@@ -85,7 +72,8 @@ export function findNearestEdge(
   let bestDist = thresholdMonths;
   for (const item of items) {
     if (item.id === excludeItemId) continue;
-    const edges: EdgeId[] = item.type === "account" ? ["start"] : ["start", "end"];
+    if (item.type === "account") continue; // accounts have no snappable edges
+    const edges: EdgeId[] = ["start", "end"];
     for (const edge of edges) {
       const edgeDate = resolveEdgeDate(scenario, item.id, edge);
       const dist = Math.abs(monthsBetween(candidateDate, edgeDate));
@@ -101,33 +89,17 @@ export function findNearestEdge(
 
 /** Clamped date for anchor drag (respects all connected edges' constraints). */
 export function computeAnchorDragTarget(scenario: Scenario, anchor: TimeAnchor, candidateDate: string): string {
-  // Build a provisional scenario with all account-start edges already moved to candidateDate.
-  // This prevents transfers from those accounts being blocked by the accounts' *current* start date
-  // when the account itself is also being moved by the same drag.
-  const movedAccountIds = new Set(
-    anchor.edges.filter(e => e.edge === "start" && scenario.accounts.some(a => a.id === e.itemId)).map(e => e.itemId)
-  );
-  const provisional = movedAccountIds.size > 0
-    ? {
-        ...scenario,
-        accounts: scenario.accounts.map(a =>
-          movedAccountIds.has(a.id) ? { ...a, startDate: candidateDate } : a
-        ),
-      }
-    : scenario;
-
   let result = candidateDate;
   for (const e of anchor.edges) {
-    const minStart = getItemMinStart(provisional, e.itemId);
     if (e.edge === "start") {
-      if (result < minStart) result = minStart;
-      const t = provisional.transfers.find(t => t.id === e.itemId);
+      if (result < scenario.timelineStart) result = scenario.timelineStart;
+      const t = scenario.transfers.find(t => t.id === e.itemId);
       if (t?.endDate && result > t.endDate) result = t.endDate;
     } else {
       if (result > scenario.timelineEnd) result = scenario.timelineEnd;
-      const t = provisional.transfers.find(t => t.id === e.itemId);
+      const t = scenario.transfers.find(t => t.id === e.itemId);
       if (t) {
-        const startD = resolveEdgeDate(provisional, t.id, "start");
+        const startD = resolveEdgeDate(scenario, t.id, "start");
         if (result < startD) result = startD;
       }
     }

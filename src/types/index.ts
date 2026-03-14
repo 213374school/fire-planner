@@ -6,7 +6,6 @@ export interface Account {
   id: string;
   name: string;
   color: string;
-  startDate: string; // YYYY-MM
   initialBalance: number;
   growthRate: number;
   growthPeriod: Period;

@@ -71,9 +71,8 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
   // Each account gets a dedicated lane; its transfers collapse within their own group below it
   const accountLaneMap: Record<string, number> = {};
   for (const acc of scenario.accounts) {
-    const accStart = acc.startDate;
     accountLaneMap[acc.id] = nextLane;
-    lanes.push({ id: acc.id, type: "account", start: accStart, end: scenario.timelineEnd, lane: nextLane });
+    lanes.push({ id: acc.id, type: "account", start: scenario.timelineStart, end: scenario.timelineEnd, lane: nextLane });
 
     const transferGroup: LaneEntry[] = [];
     for (const t of scenario.transfers) {
@@ -139,7 +138,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
       for (const edge of anchor.edges) {
         const acc = scenario.accounts.find(a => a.id === edge.itemId);
         if (acc) {
-          if (edge.edge === "start") accountUpdates.push({ id: edge.itemId, changes: { startDate: clamped } });
+          // accounts are omnipresent — no edge to update
         } else {
           const t = scenario.transfers.find(t => t.id === edge.itemId);
           if (t) {
@@ -270,7 +269,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
         const transferUpdates: { id: string; changes: Partial<import("../types").Transfer> }[] = [];
 
         if (type === "account") {
-          accountUpdates.push({ id, changes: { startDate: clampedDate } });
+          // accounts are omnipresent — nothing to drag
         } else {
           if (draggedEdge === "start") {
             transferUpdates.push({ id, changes: { startDate: clampedDate } });
@@ -310,11 +309,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
         const transferUpdates: { id: string; changes: Partial<import("../types").Transfer> }[] = [];
 
         if (type === "account") {
-          const acc = scenario.accounts.find(a => a.id === id);
-          if (acc) {
-            const newStart = addMonths(resolveEdgeDate(scenario, id, "start"), delta);
-            accountUpdates.push({ id, changes: { startDate: newStart } });
-          }
+          // accounts are omnipresent — nothing to drag
         } else {
           const t = scenario.transfers.find(t => t.id === id);
           if (t) {
@@ -575,8 +570,8 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
           const isSelected = id === selectedItemId;
           const top = lane * laneHeight + 2 + labelHeight;
 
-// For drag: pass literal dates (not resolved) so the handler writes back correctly
-          const dragStart = transfer ? transfer.startDate : acc!.startDate;
+// For drag: only transfers are draggable
+          const dragStart = transfer ? transfer.startDate : null;
           const dragEnd = transfer ? transfer.endDate : null;
 
           const isTransfer = type === "transfer" && !!transfer;
@@ -609,7 +604,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
                 zIndex: 2,
               }}
               onClick={() => onSelectItem(id, type)}
-              onMouseDown={e => handleDrag(e, id, type, "body", dragStart, dragEnd)}
+              onMouseDown={dragStart !== null ? e => handleDrag(e, id, type, "body", dragStart, dragEnd) : undefined}
             >
               {isTransfer && (
                 <>
@@ -639,22 +634,22 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
               {isTransfer && !isOneTime && widthPct > 5 && tgtName && (
                 <span className="absolute right-1 text-xs text-white pointer-events-none" style={{ zIndex: 1 }}>{tgtName}</span>
               )}
-              {/* Handles */}
-              {!isOneTime && (
+              {/* Handles — transfers only */}
+              {isTransfer && !isOneTime && (
                 <>
                   <div
                     data-edge-id={`${id}-start`}
                     className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize"
                     style={{ overflow: "visible" }}
-                    onMouseDown={e => { e.stopPropagation(); handleDrag(e, id, type, "left", dragStart, dragEnd); }}
+                    onMouseDown={e => { e.stopPropagation(); handleDrag(e, id, type, "left", dragStart!, dragEnd); }}
                   >
                   </div>
-                  {(type === "transfer" && transfer?.endDate !== null) && (
+                  {transfer?.endDate !== null && (
                     <div
                       data-edge-id={`${id}-end`}
                       className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize"
                       style={{ overflow: "visible" }}
-                      onMouseDown={e => { e.stopPropagation(); handleDrag(e, id, type, "right", dragStart, dragEnd); }}
+                      onMouseDown={e => { e.stopPropagation(); handleDrag(e, id, type, "right", dragStart!, dragEnd); }}
                     >
                     </div>
                   )}
