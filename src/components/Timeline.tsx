@@ -95,12 +95,6 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
   const labelHeight = 16;           // reserved at top for anchor date labels
   const barsHeight = (maxLane + 1) * laneHeight + 8 + labelHeight;
 
-  // Build anchored edge set for dot indicators
-  const anchoredEdgeKeys = new Set<string>();
-  for (const anchor of anchors)
-    for (const e of anchor.edges)
-      anchoredEdgeKeys.add(`${e.itemId}:${e.edge}`);
-
   const handleAnchorDrag = useCallback((e: React.MouseEvent, anchor: TimeAnchor) => {
     e.stopPropagation();
     const container = containerRef.current;
@@ -580,11 +574,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
           const isSelected = id === selectedItemId;
           const top = lane * laneHeight + 2 + labelHeight;
 
-          // Whether edges are anchored
-          const startAnchored = anchoredEdgeKeys.has(`${id}:start`);
-          const endAnchored = anchoredEdgeKeys.has(`${id}:end`);
-
-          // For drag: pass literal dates (not resolved) so the handler writes back correctly
+// For drag: pass literal dates (not resolved) so the handler writes back correctly
           const dragStart = transfer ? transfer.startDate : acc!.startDate;
           const dragEnd = transfer ? transfer.endDate : null;
 
@@ -657,21 +647,6 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
                     style={{ overflow: "visible" }}
                     onMouseDown={e => { e.stopPropagation(); handleDrag(e, id, type, "left", dragStart, dragEnd); }}
                   >
-                    {startAnchored && (
-                      <div
-                        className="pointer-events-none absolute"
-                        style={{
-                          width: 4, height: 4,
-                          background: "white",
-                          borderRadius: "50%",
-                          top: "50%",
-                          left: "50%",
-                          transform: "translate(-50%, -50%)",
-                          zIndex: 10,
-                          boxShadow: "0 0 0 1px rgba(0,0,0,0.4)",
-                        }}
-                      />
-                    )}
                   </div>
                   {(type === "transfer" && transfer?.endDate !== null) && (
                     <div
@@ -680,21 +655,6 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
                       style={{ overflow: "visible" }}
                       onMouseDown={e => { e.stopPropagation(); handleDrag(e, id, type, "right", dragStart, dragEnd); }}
                     >
-                      {endAnchored && (
-                        <div
-                          className="pointer-events-none absolute"
-                          style={{
-                            width: 4, height: 4,
-                            background: "white",
-                            borderRadius: "50%",
-                            top: "50%",
-                            left: "50%",
-                            transform: "translate(-50%, -50%)",
-                            zIndex: 10,
-                            boxShadow: "0 0 0 1px rgba(0,0,0,0.4)",
-                          }}
-                        />
-                      )}
                     </div>
                   )}
                 </>
