@@ -591,21 +591,22 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
           return (
             <div
               key={id}
-              className={`absolute flex items-center rounded cursor-pointer ${isSelected ? "ring-2 ring-white ring-offset-1" : ""}`}
+              className={`absolute flex items-center rounded cursor-pointer ${isSelected ? "outline outline-2 outline-gray-900 dark:outline-white" : ""}`}
               style={{
                 left: stuckRight ? `calc(100% - ${minCompactWidth - 1}px)` : `calc(${leftPct}% + 1.5px)`,
                 width: isTransfer ? (isOneTime ? 0 : `calc(${widthPct}% - 3px)`) : `calc(${Math.max(widthPct, 0.5)}% - 3px)`,
                 minWidth: isTransfer ? `${minCompactWidth - 2}px` : undefined,
                 top,
                 height: h,
-                background: isTransfer ? "transparent" : srcColor,
-                opacity: isTransfer ? 0.6 : 0.85,
                 overflow: "hidden",
                 zIndex: 2,
               }}
               onClick={() => onSelectItem(id, type)}
               onMouseDown={dragStart !== null ? e => handleDrag(e, id, type, "body", dragStart, dragEnd) : undefined}
             >
+              {!isTransfer && (
+                <div style={{ position: "absolute", inset: 0, background: srcColor, opacity: 0.85, pointerEvents: "none" }} />
+              )}
               {isTransfer && (
                 <>
                   {/* Left (src) section */}
@@ -614,6 +615,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
                     left: 0, top: 0, bottom: 0,
                     width: `calc(50% + ${(arrowTip - 2) / 2}px)`,
                     background: srcColor,
+                    opacity: 0.6,
                     clipPath: `polygon(0% 0%, calc(100% - ${arrowTip}px) 0%, 100% 50%, calc(100% - ${arrowTip}px) 100%, 0% 100%)`,
                     pointerEvents: "none",
                   }} />
@@ -623,6 +625,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
                     left: `calc(50% - ${(arrowTip + 2) / 2}px)`,
                     right: 0, top: 0, bottom: 0,
                     background: tgtColor,
+                    opacity: 0.6,
                     clipPath: `polygon(2px 0%, 100% 0%, 100% 100%, 2px 100%, ${arrowTip + 2}px 50%, 2px 0%)`,
                     pointerEvents: "none",
                   }} />
