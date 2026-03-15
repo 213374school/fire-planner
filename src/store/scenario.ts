@@ -203,6 +203,7 @@ export const useScenarioStore = create<ScenarioStore>()(
             name: `Account ${count + 1}`,
             color: COLORS[count % COLORS.length],
             initialBalance: 10000,
+            initialPrincipalRatio: 1,
             growthRate: 0.04,
             growthPeriod: "yearly",
           };

@@ -97,6 +97,18 @@ export function AccountEditor({ account }: Props) {
         />
       </Field>
 
+      <Field label={`Initial Principal/Gain Ratio — ${Math.round((account.initialPrincipalRatio ?? 1) * 100)}/${Math.round((1 - (account.initialPrincipalRatio ?? 1)) * 100)}%`}>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={account.initialPrincipalRatio ?? 1}
+          onChange={e => update("initialPrincipalRatio", parseFloat(e.target.value))}
+          className="w-full accent-indigo-600"
+        />
+      </Field>
+
       <Field label="Annual Growth Rate (%)">
         <input
           type="number"

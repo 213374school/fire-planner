@@ -53,7 +53,7 @@ export function runSimulation(scenario: Scenario): SimulationResult {
   // All accounts are active from timelineStart
   for (const acc of accounts) {
     balance[acc.id] = acc.initialBalance;
-    principal[acc.id] = acc.initialBalance;
+    principal[acc.id] = acc.initialBalance * (acc.initialPrincipalRatio ?? 1);
   }
 
   for (let i = 0; i < totalMonths; i++) {

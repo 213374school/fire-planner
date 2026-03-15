@@ -7,6 +7,7 @@ export interface Account {
   name: string;
   color: string;
   initialBalance: number;
+  initialPrincipalRatio: number; // 0–1, fraction of initialBalance that is principal (rest is unrealised gain)
   growthRate: number;
   growthPeriod: Period;
   notes?: string;

@@ -32,6 +32,7 @@ export function makeDefaultAccount(existingCount: number = 0): Account {
     name: `Account ${existingCount + 1}`,
     color: ACCOUNT_COLORS[existingCount % ACCOUNT_COLORS.length],
     initialBalance: 0,
+    initialPrincipalRatio: 1,
     growthRate: 0.04,
     growthPeriod: "yearly",
   };
