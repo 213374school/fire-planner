@@ -210,15 +210,55 @@ export function Chart({ result, accounts, scenario, visibleAccounts, viewportSta
         .attr("stroke-dasharray", "4,2");
     }
 
-    // X axis — show year labels
-    const yearMonths = months.filter(m => m.endsWith("-01"));
+    // X axis — adaptive ticks based on zoom level
+    const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    let tickValues: string[];
+    let tickLabel: (m: string) => string;
+
+    const pxPerMonth = width / Math.max(viewMonths - 1, 1);
+    const MIN_PX = 35; // minimum pixels between ticks
+
+    if (pxPerMonth * 1 >= MIN_PX) {
+      // Every month
+      tickValues = months;
+      tickLabel = m => {
+        const [yr, mo] = m.split("-");
+        const name = MONTH_NAMES[parseInt(mo) - 1];
+        return mo === "01" ? `${name} ${yr}` : name;
+      };
+    } else if (pxPerMonth * 3 >= MIN_PX) {
+      // Every quarter
+      tickValues = months.filter(m => ["01","04","07","10"].includes(m.slice(5)));
+      tickLabel = m => {
+        const [yr, mo] = m.split("-");
+        if (mo === "01") return yr;
+        return `${mo === "04" ? "Q2" : mo === "07" ? "Q3" : "Q4"} ${yr}`;
+      };
+    } else if (pxPerMonth * 12 >= MIN_PX) {
+      // Every year
+      tickValues = months.filter(m => m.endsWith("-01"));
+      tickLabel = m => m.slice(0, 4);
+    } else if (pxPerMonth * 60 >= MIN_PX) {
+      // Every 5 years
+      tickValues = months.filter(m => m.endsWith("-01") && parseInt(m) % 5 === 0);
+      tickLabel = m => m.slice(0, 4);
+    } else if (pxPerMonth * 120 >= MIN_PX) {
+      // Every 10 years
+      tickValues = months.filter(m => m.endsWith("-01") && parseInt(m) % 10 === 0);
+      tickLabel = m => m.slice(0, 4);
+    } else {
+      // Every 25 years
+      tickValues = months.filter(m => m.endsWith("-01") && parseInt(m) % 25 === 0);
+      tickLabel = m => m.slice(0, 4);
+    }
+
     const xAxisTicks = g.append("g")
       .attr("transform", `translate(0,${height})`);
 
     xAxisTicks.call(
       d3.axisBottom(xScale)
-        .tickValues(yearMonths)
-        .tickFormat(m => (m as string).slice(0, 4))
+        .tickValues(tickValues)
+        .tickFormat(m => tickLabel(m as string))
     );
 
     // Y axis
