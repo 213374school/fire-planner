@@ -98,25 +98,11 @@ export function AccountEditor({ account }: Props) {
       </Field>
 
       <Field label={`Initial Principal/Gain Ratio — ${Math.round((account.initialPrincipalRatio ?? 1) * 100)}/${Math.round((1 - (account.initialPrincipalRatio ?? 1)) * 100)}%`}>
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.01}
-          value={account.initialPrincipalRatio ?? 1}
-          onChange={e => update("initialPrincipalRatio", parseFloat(e.target.value))}
-          className="w-full accent-indigo-600"
-        />
+        <PercentSlider value={account.initialPrincipalRatio ?? 1} min={0} max={1} step={0.01} onChange={v => update("initialPrincipalRatio", v)} />
       </Field>
 
-      <Field label="Annual Growth Rate (%)">
-        <input
-          type="number"
-          value={(account.growthRate * 100).toFixed(2)}
-          step="0.1"
-          onChange={e => update("growthRate", (parseFloat(e.target.value) || 0) / 100)}
-          className="input"
-        />
+      <Field label={`Annual Growth Rate — ${(account.growthRate * 100).toFixed(1)}%`}>
+        <PercentSlider value={account.growthRate} min={-0.5} max={0.5} step={0.001} onChange={v => update("growthRate", v)} />
       </Field>
 
       <Field label="Compounding Frequency">
@@ -137,6 +123,17 @@ export function AccountEditor({ account }: Props) {
           className="input"
         />
       </Field>
+    </div>
+  );
+}
+
+function PercentSlider({ value, min, max, step, onChange }: { value: number; min: number; max: number; step: number; onChange: (v: number) => void }) {
+  const clamp = (v: number) => Math.max(min, Math.min(max, parseFloat(v.toFixed(4))));
+  return (
+    <div className="flex items-center gap-2">
+      <button onClick={() => onChange(clamp(value - step))} className="w-6 h-6 flex items-center justify-center rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 select-none">−</button>
+      <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(parseFloat(e.target.value))} className="flex-1 accent-indigo-600" />
+      <button onClick={() => onChange(clamp(value + step))} className="w-6 h-6 flex items-center justify-center rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 select-none">+</button>
     </div>
   );
 }

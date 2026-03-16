@@ -116,21 +116,22 @@ export function TransferEditor({ transfer, accounts }: Props) {
       {!isGainsOnly && (
         <Field label={
           transfer.amountType === "percent-balance"
-            ? "Amount (% of balance)"
+            ? `Amount — ${(transfer.amount * 100).toFixed(1)}% of balance`
             : (transfer.amountType === "fixed" && (transfer.inflationHedged ?? true) === false)
               ? "Amount (today's value)"
               : "Amount"
         }>
-          <input
-            type="number"
-            value={transfer.amountType === "percent-balance" ? (transfer.amount * 100).toFixed(2) : transfer.amount}
-            step={transfer.amountType === "percent-balance" ? "0.1" : "100"}
-            onChange={e => {
-              const v = parseFloat(e.target.value) || 0;
-              update("amount", transfer.amountType === "percent-balance" ? v / 100 : v);
-            }}
-            className="input"
-          />
+          {transfer.amountType === "percent-balance" ? (
+            <PercentSlider value={transfer.amount} min={0} max={1} step={0.001} onChange={v => update("amount", v)} />
+          ) : (
+            <input
+              type="number"
+              value={transfer.amount}
+              step="100"
+              onChange={e => update("amount", parseFloat(e.target.value) || 0)}
+              className="input"
+            />
+          )}
         </Field>
       )}
 
@@ -149,16 +150,8 @@ export function TransferEditor({ transfer, accounts }: Props) {
 
       {hasTarget && (
         <>
-          <Field label="Tax Rate (%)">
-            <input
-              type="number"
-              value={(transfer.taxRate * 100).toFixed(1)}
-              step="0.5"
-              min="0"
-              max="100"
-              onChange={e => update("taxRate", (parseFloat(e.target.value) || 0) / 100)}
-              className="input"
-            />
+          <Field label={`Tax Rate — ${(transfer.taxRate * 100).toFixed(1)}%`}>
+            <PercentSlider value={transfer.taxRate} min={0} max={1} step={0.005} onChange={v => update("taxRate", v)} />
           </Field>
 
           <Field label="Tax Basis">
@@ -178,6 +171,17 @@ export function TransferEditor({ transfer, accounts }: Props) {
       <Field label="Notes">
         <textarea value={transfer.notes ?? ""} onChange={e => update("notes", e.target.value)} rows={2} className="input" />
       </Field>
+    </div>
+  );
+}
+
+function PercentSlider({ value, min, max, step, onChange }: { value: number; min: number; max: number; step: number; onChange: (v: number) => void }) {
+  const clamp = (v: number) => Math.max(min, Math.min(max, parseFloat(v.toFixed(4))));
+  return (
+    <div className="flex items-center gap-2">
+      <button onClick={() => onChange(clamp(value - step))} className="w-6 h-6 flex items-center justify-center rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 select-none">−</button>
+      <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(parseFloat(e.target.value))} className="flex-1 accent-indigo-600" />
+      <button onClick={() => onChange(clamp(value + step))} className="w-6 h-6 flex items-center justify-center rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 select-none">+</button>
     </div>
   );
 }
