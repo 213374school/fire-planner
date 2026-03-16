@@ -298,17 +298,17 @@ export default function App() {
 
           {/* Anchor labels strip — fixed below chart, aligned to chart x-axis */}
           {(() => {
-            const anchors = (scenario.anchors ?? []).filter(a => !a.fixed);
+            const allAnchors = scenario.anchors ?? [];
             const viewMonths = safeViewportEnd - safeViewportStart + 1;
 
-            // Compute pct positions
-            const positioned = anchors.flatMap(anchor => {
+            // Compute pct positions for all anchors
+            const positioned = allAnchors.flatMap(anchor => {
               const monthIdx = monthsBetween(scenario.timelineStart, anchor.date) - safeViewportStart;
               if (monthIdx < 0 || monthIdx > viewMonths - 1) return [];
               return [{ anchor, pct: (monthIdx / (viewMonths - 1)) * 100 }];
             });
 
-            // Crowding: hide labels whose nearest neighbour is within MIN_PCT of total viewport
+            // Crowding: hide non-fixed labels whose nearest neighbour is within threshold
             const MIN_LABEL_PX = 80;
             const innerWidth = (chartAreaRef.current?.clientWidth ?? 800) - CHART_MARGIN.left - CHART_MARGIN.right;
             const minPct = (MIN_LABEL_PX / innerWidth) * 100;
@@ -316,8 +316,21 @@ export default function App() {
             for (let i = 0; i < positioned.length; i++) {
               for (let j = i + 1; j < positioned.length; j++) {
                 if (Math.abs(positioned[j].pct - positioned[i].pct) < minPct) {
-                  crowded.add(positioned[i].anchor.id);
-                  crowded.add(positioned[j].anchor.id);
+                  const iHovered = positioned[i].anchor.id === hoveredAnchorId;
+                  const jHovered = positioned[j].anchor.id === hoveredAnchorId;
+                  // Hovered anchor always wins, then fixed, then non-fixed
+                  if (iHovered) {
+                    crowded.add(positioned[j].anchor.id);
+                  } else if (jHovered) {
+                    crowded.add(positioned[i].anchor.id);
+                  } else if (!positioned[i].anchor.fixed && !positioned[j].anchor.fixed) {
+                    crowded.add(positioned[i].anchor.id);
+                    crowded.add(positioned[j].anchor.id);
+                  } else if (!positioned[i].anchor.fixed) {
+                    crowded.add(positioned[i].anchor.id);
+                  } else if (!positioned[j].anchor.fixed) {
+                    crowded.add(positioned[j].anchor.id);
+                  }
                 }
               }
             }
@@ -328,9 +341,9 @@ export default function App() {
                 className="flex-shrink-0 select-none"
                 style={{ height: 20, paddingLeft: CHART_MARGIN.left, paddingRight: CHART_MARGIN.right }}
               >
-                {/* Inner div is the positioning reference — matches chart inner width exactly */}
                 <div className="relative h-full">
                 {positioned.map(({ anchor, pct }) => {
+                  const isFixed = !!anchor.fixed;
                   const isHovered = anchor.id === hoveredAnchorId;
                   if (crowded.has(anchor.id) && !isHovered) return null;
                   return (
@@ -342,7 +355,9 @@ export default function App() {
                         top: 2,
                         fontSize: 10,
                         whiteSpace: "nowrap",
-                        color: isHovered ? "rgba(99,202,183,1)" : "rgba(99,202,183,0.85)",
+                        color: isFixed
+                          ? "rgba(148,163,184,0.75)"
+                          : isHovered ? "rgba(99,202,183,1)" : "rgba(99,202,183,0.85)",
                       }}
                     >
                       {monthToLabel(anchor.date)}

@@ -118,8 +118,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
   const h = laneHeight - 4;         // bar height = 20px
   const arrowTip = h / 2;           // = 10px — width of the chevron point
   const minCompactWidth = (h + arrowTip * 2 + 8) / 2; // enough to show both color halves clearly
-  const labelHeight = 16;           // reserved at top for anchor date labels
-  const barsHeight = (maxLane + 1) * laneHeight + 8 + labelHeight;
+  const barsHeight = (maxLane + 1) * laneHeight + 8;
 
   const handleAnchorDrag = useCallback((e: React.MouseEvent, anchor: TimeAnchor) => {
     e.stopPropagation();
@@ -689,7 +688,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
 
         {/* Create rows — drag here to add a new transfer from that source */}
         {createRows.map(({ sourceAccountId, lane }) => {
-          const top = lane * laneHeight + 2 + labelHeight;
+          const top = lane * laneHeight + 2;
           const srcAcc = scenario.accounts.find(a => a.id === sourceAccountId);
           const rowColor = srcAcc?.color ?? "#6b7280";
           return (
@@ -716,7 +715,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
         {/* Preview bar while drag-creating a new transfer */}
         {createDragPreview !== null && (() => {
           const { sourceAccountId, lane, startDate, endDate } = createDragPreview;
-          const top = lane * laneHeight + 2 + labelHeight;
+          const top = lane * laneHeight + 2;
           const startIdx = Math.max(0, monthsBetween(scenario.timelineStart, startDate) - viewportStart);
           const endIdx = Math.min(viewMonths - 1, monthsBetween(scenario.timelineStart, endDate) - viewportStart);
           const leftPct = (startIdx / (viewMonths - 1)) * 100;
@@ -757,7 +756,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
 
           const isSelected = id === selectedItemId;
           const hasSelection = selectedItemId != null;
-          const top = lane * laneHeight + 2 + labelHeight;
+          const top = lane * laneHeight + 2;
 
 // For drag: only transfers are draggable
           const dragStart = transfer ? (transfer.startDate ?? scenario.timelineStart) : null;
