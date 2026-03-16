@@ -77,8 +77,9 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
     if (t.sourceAccountId !== null) continue;
     const tStart = t.startDate;
     const tEnd = t.endDate ?? scenario.timelineEnd;
-    const localLane = assignLaneIn(contribGroup, tStart, tEnd);
-    contribGroup.push({ start: tStart, end: tEnd, lane: localLane });
+    const tEndForLane = t.endDate ?? t.startDate; // one-time events occupy only their start point for stacking
+    const localLane = assignLaneIn(contribGroup, tStart, tEndForLane);
+    contribGroup.push({ start: tStart, end: tEndForLane, lane: localLane });
     lanes.push({ id: t.id, type: "transfer", start: tStart, end: tEnd, lane: nextLane + localLane });
   }
   // External source create row — always present, acts as group separator
@@ -97,8 +98,9 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
       if (t.sourceAccountId !== acc.id) continue;
       const tStart = t.startDate;
       const tEnd = t.endDate ?? scenario.timelineEnd;
-      const localLane = assignLaneIn(transferGroup, tStart, tEnd);
-      transferGroup.push({ start: tStart, end: tEnd, lane: localLane });
+      const tEndForLane = t.endDate ?? t.startDate; // one-time events occupy only their start point for stacking
+      const localLane = assignLaneIn(transferGroup, tStart, tEndForLane);
+      transferGroup.push({ start: tStart, end: tEndForLane, lane: localLane });
       lanes.push({ id: t.id, type: "transfer", start: tStart, end: tEnd, lane: nextLane + 1 + localLane });
     }
 
