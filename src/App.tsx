@@ -36,6 +36,10 @@ export default function App() {
     addAccount,
     addTransfer,
     selectItem,
+    undo,
+    redo,
+    _undoStack,
+    _redoStack,
   } = useScenarioStore();
 
   const [theme, toggleTheme] = useTheme();
@@ -58,6 +62,19 @@ export default function App() {
 
   // Suppress unused variable warning
   void selectedItemType;
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      else if ((e.key === "z" && e.shiftKey) || e.key === "y") { e.preventDefault(); redo(); }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [undo, redo]);
 
   // Initialize scenario if none exists
   useEffect(() => {
@@ -247,6 +264,18 @@ export default function App() {
           <span className="text-sm text-gray-500 dark:text-gray-400">{scenario.name}</span>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={undo}
+            disabled={_undoStack.length === 0}
+            className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 disabled:opacity-30"
+            title="Undo (Ctrl+Z)"
+          >↩</button>
+          <button
+            onClick={redo}
+            disabled={_redoStack.length === 0}
+            className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 disabled:opacity-30"
+            title="Redo (Ctrl+Shift+Z)"
+          >↪</button>
           <button onClick={() => addAccount()} className="btn-primary text-sm">
             + Account
           </button>

@@ -6,6 +6,13 @@ import { runSimulation } from "../engine/simulate";
 import { resolveEdgeDate } from "../utils/anchors";
 import type { SimulationResult } from "../types";
 
+interface HistorySnapshot {
+  scenarios: Record<string, Scenario>;
+  activeScenarioId: string | null;
+}
+
+const HISTORY_LIMIT = 50;
+
 interface ScenarioStore {
   scenarios: Record<string, Scenario>;
   activeScenarioId: string | null;
@@ -16,6 +23,13 @@ interface ScenarioStore {
   // UI state
   selectedItemId: string | null;
   selectedItemType: "account" | "transfer" | null;
+
+  // History
+  _undoStack: HistorySnapshot[];
+  _redoStack: HistorySnapshot[];
+  undo: () => void;
+  redo: () => void;
+  captureHistorySnapshot: () => void;
 
   // Actions
   createScenario: () => void;
@@ -47,6 +61,7 @@ interface ScenarioStore {
     transferUpdates: { id: string; changes: Partial<Transfer> }[],
     anchorsToRemove: string[],
     anchorsToUpdate: TimeAnchor[],
+    options?: { skipHistory?: boolean },
   ) => void;
 }
 
@@ -139,6 +154,17 @@ function syncAnchorDates(anchors: TimeAnchor[] | undefined, scenario: Scenario):
   });
 }
 
+function captureSnapshot(state: ScenarioStore): HistorySnapshot {
+  return { scenarios: state.scenarios, activeScenarioId: state.activeScenarioId };
+}
+
+function withHistory(state: ScenarioStore) {
+  return {
+    _undoStack: [...state._undoStack, captureSnapshot(state)].slice(-HISTORY_LIMIT),
+    _redoStack: [] as HistorySnapshot[],
+  };
+}
+
 export const useScenarioStore = create<ScenarioStore>()(
   persist(
     (set, get) => ({
@@ -147,6 +173,43 @@ export const useScenarioStore = create<ScenarioStore>()(
       simulationResult: null,
       selectedItemId: null,
       selectedItemType: null,
+      _undoStack: [],
+      _redoStack: [],
+
+      captureHistorySnapshot: () => {
+        set(state => ({
+          _undoStack: [...state._undoStack, captureSnapshot(state)].slice(-HISTORY_LIMIT),
+          _redoStack: [],
+        }));
+      },
+
+      undo: () => {
+        set(state => {
+          if (state._undoStack.length === 0) return state;
+          const prev = state._undoStack[state._undoStack.length - 1];
+          return {
+            scenarios: prev.scenarios,
+            activeScenarioId: prev.activeScenarioId,
+            simulationResult: recompute(prev.scenarios, prev.activeScenarioId),
+            _undoStack: state._undoStack.slice(0, -1),
+            _redoStack: [...state._redoStack, captureSnapshot(state)],
+          };
+        });
+      },
+
+      redo: () => {
+        set(state => {
+          if (state._redoStack.length === 0) return state;
+          const next = state._redoStack[state._redoStack.length - 1];
+          return {
+            scenarios: next.scenarios,
+            activeScenarioId: next.activeScenarioId,
+            simulationResult: recompute(next.scenarios, next.activeScenarioId),
+            _undoStack: [...state._undoStack, captureSnapshot(state)],
+            _redoStack: state._redoStack.slice(0, -1),
+          };
+        });
+      },
 
       createScenario: () => {
         const s = ensureFixedAnchors(makeDefaultScenario());
@@ -213,7 +276,7 @@ export const useScenarioStore = create<ScenarioStore>()(
             updatedAt: currentMonth(),
           });
           const scenarios = { ...state.scenarios, [state.activeScenarioId]: updated };
-          return { scenarios, simulationResult: recompute(scenarios, state.activeScenarioId) };
+          return { ...withHistory(state), scenarios, simulationResult: recompute(scenarios, state.activeScenarioId) };
         });
       },
 
@@ -239,6 +302,7 @@ export const useScenarioStore = create<ScenarioStore>()(
           });
           const scenarios = { ...state.scenarios, [state.activeScenarioId]: updated };
           return {
+            ...withHistory(state),
             scenarios,
             simulationResult: recompute(scenarios, state.activeScenarioId),
             selectedItemId: newAcc.id,
@@ -254,7 +318,7 @@ export const useScenarioStore = create<ScenarioStore>()(
           const accounts = scenario.accounts.map(a => a.id === id ? { ...a, ...updates } : a);
           const newScenario: Scenario = { ...scenario, accounts, updatedAt: currentMonth() };
           const scenarios = { ...state.scenarios, [state.activeScenarioId]: newScenario };
-          return { scenarios, simulationResult: recompute(scenarios, state.activeScenarioId) };
+          return { ...withHistory(state), scenarios, simulationResult: recompute(scenarios, state.activeScenarioId) };
         });
       },
 
@@ -276,6 +340,7 @@ export const useScenarioStore = create<ScenarioStore>()(
             [state.activeScenarioId]: { ...scenario, accounts, transfers, anchors, updatedAt: currentMonth() },
           };
           return {
+            ...withHistory(state),
             scenarios,
             simulationResult: recompute(scenarios, state.activeScenarioId),
             selectedItemId: null,
@@ -310,6 +375,7 @@ export const useScenarioStore = create<ScenarioStore>()(
           });
           const scenarios = { ...state.scenarios, [state.activeScenarioId]: updated };
           return {
+            ...withHistory(state),
             scenarios,
             simulationResult: recompute(scenarios, state.activeScenarioId),
             selectedItemId: newT.id,
@@ -372,6 +438,7 @@ export const useScenarioStore = create<ScenarioStore>()(
 
           const scenarios = { ...state.scenarios, [state.activeScenarioId]: updated };
           return {
+            ...withHistory(state),
             scenarios,
             simulationResult: recompute(scenarios, state.activeScenarioId),
             selectedItemId: newT.id,
@@ -390,7 +457,7 @@ export const useScenarioStore = create<ScenarioStore>()(
           const synced = syncAnchorDates(newScenario.anchors, newScenario);
           const finalScenario = ensureSingleEdgeAnchors({ ...newScenario, anchors: synced });
           const scenarios = { ...state.scenarios, [state.activeScenarioId]: finalScenario };
-          return { scenarios, simulationResult: recompute(scenarios, state.activeScenarioId) };
+          return { ...withHistory(state), scenarios, simulationResult: recompute(scenarios, state.activeScenarioId) };
         });
       },
 
@@ -405,6 +472,7 @@ export const useScenarioStore = create<ScenarioStore>()(
             [state.activeScenarioId]: { ...scenario, transfers, anchors, updatedAt: currentMonth() },
           };
           return {
+            ...withHistory(state),
             scenarios,
             simulationResult: recompute(scenarios, state.activeScenarioId),
             selectedItemId: null,
@@ -443,7 +511,7 @@ export const useScenarioStore = create<ScenarioStore>()(
             ...state.scenarios,
             [state.activeScenarioId]: { ...scenario, anchors, updatedAt: currentMonth() },
           };
-          return { scenarios, simulationResult: recompute(scenarios, state.activeScenarioId) };
+          return { ...withHistory(state), scenarios, simulationResult: recompute(scenarios, state.activeScenarioId) };
         });
       },
 
@@ -456,7 +524,7 @@ export const useScenarioStore = create<ScenarioStore>()(
             ...state.scenarios,
             [state.activeScenarioId]: { ...scenario, anchors, updatedAt: currentMonth() },
           };
-          return { scenarios, simulationResult: recompute(scenarios, state.activeScenarioId) };
+          return { ...withHistory(state), scenarios, simulationResult: recompute(scenarios, state.activeScenarioId) };
         });
       },
 
@@ -469,11 +537,11 @@ export const useScenarioStore = create<ScenarioStore>()(
             ...state.scenarios,
             [state.activeScenarioId]: { ...scenario, anchors, updatedAt: currentMonth() },
           };
-          return { scenarios, simulationResult: recompute(scenarios, state.activeScenarioId) };
+          return { ...withHistory(state), scenarios, simulationResult: recompute(scenarios, state.activeScenarioId) };
         });
       },
 
-      applyDragUpdate: (accountUpdates, transferUpdates, anchorsToRemove, anchorsToUpdate) => {
+      applyDragUpdate: (accountUpdates, transferUpdates, anchorsToRemove, anchorsToUpdate, options) => {
         set(state => {
           if (!state.activeScenarioId) return state;
           const scenario = state.scenarios[state.activeScenarioId];
@@ -499,7 +567,11 @@ export const useScenarioStore = create<ScenarioStore>()(
             ...state.scenarios,
             [state.activeScenarioId]: { ...scenario, accounts, transfers, anchors, updatedAt: currentMonth() },
           };
-          return { scenarios, simulationResult: recompute(scenarios, state.activeScenarioId) };
+          return {
+            ...(options?.skipHistory ? {} : withHistory(state)),
+            scenarios,
+            simulationResult: recompute(scenarios, state.activeScenarioId),
+          };
         });
       },
     }),

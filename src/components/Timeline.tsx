@@ -41,6 +41,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
   const addAnchor = useScenarioStore(s => s.addAnchor);
   const updateAnchor = useScenarioStore(s => s.updateAnchor);
   const addTransferAt = useScenarioStore(s => s.addTransferAt);
+  const captureHistorySnapshot = useScenarioStore(s => s.captureHistorySnapshot);
 
   const [createDragPreview, setCreateDragPreview] = useState<{
     sourceAccountId: string | null;
@@ -122,6 +123,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
 
   const handleAnchorDrag = useCallback((e: React.MouseEvent, anchor: TimeAnchor) => {
     e.stopPropagation();
+    captureHistorySnapshot();
     const container = containerRef.current;
     if (!container) return;
     isDraggingAnchorRef.current = true;
@@ -182,7 +184,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
         }
       }
 
-      applyDragUpdate(accountUpdates, transferUpdates, [], [{ ...anchor, date: clamped }]);
+      applyDragUpdate(accountUpdates, transferUpdates, [], [{ ...anchor, date: clamped }], { skipHistory: true });
     };
 
     const onMouseUp = () => {
@@ -200,13 +202,13 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
           if (!mergedEdges.some(e => e.itemId === edge.itemId && e.edge === edge.edge))
             mergedEdges.push(edge);
         }
-        applyDragUpdate([], [], [anchor.id], [{ ...mergeTarget, edges: mergedEdges }]);
+        applyDragUpdate([], [], [anchor.id], [{ ...mergeTarget, edges: mergedEdges }], { skipHistory: true });
       }
     };
 
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
-  }, [viewMonths, scenario, applyDragUpdate, anchors, onHoverIdx, onHoverAnchorId]);
+  }, [viewMonths, scenario, applyDragUpdate, captureHistorySnapshot, anchors, onHoverIdx, onHoverAnchorId]);
 
   const handleDrag = useCallback((
     e: React.MouseEvent,
@@ -217,6 +219,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
     originalEnd: string | null,
   ) => {
     e.stopPropagation();
+    captureHistorySnapshot();
     const container = containerRef.current;
     if (!container) return;
     const containerWidth = container.clientWidth;
@@ -332,7 +335,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
         } else {
           ownAnchorUpdates = [];
         }
-        applyDragUpdate(accountUpdates, transferUpdates, [], ownAnchorUpdates);
+        applyDragUpdate(accountUpdates, transferUpdates, [], ownAnchorUpdates, { skipHistory: true });
         // Keep hovered anchor ID current (may have switched to a temp anchor)
         onHoverAnchorId(tempAnchorIdRef.current ?? findAnchorForEdge(anchors, id, draggedEdge)?.id ?? null);
       } else {
@@ -408,7 +411,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
             }
           }
         }
-        applyDragUpdate(accountUpdates, transferUpdates, [], anchorUpdates);
+        applyDragUpdate(accountUpdates, transferUpdates, [], anchorUpdates, { skipHistory: true });
       }
     };
 
@@ -496,7 +499,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
         }
 
         if (anchorsToRemove.length > 0 || anchorsToUpdate.length > 0) {
-          applyDragUpdate([], [], anchorsToRemove, anchorsToUpdate);
+          applyDragUpdate([], [], anchorsToRemove, anchorsToUpdate, { skipHistory: true });
         }
       } else {
         // Body drag mouseup — disconnect all of this item's edges from their anchors
@@ -524,14 +527,14 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
         }
 
         if (anchorsToRemove.length > 0 || anchorsToUpdate.length > 0) {
-          applyDragUpdate([], [], anchorsToRemove, anchorsToUpdate);
+          applyDragUpdate([], [], anchorsToRemove, anchorsToUpdate, { skipHistory: true });
         }
       }
     };
 
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
-  }, [viewMonths, scenario, applyDragUpdate, addAnchor, updateAnchor, anchors, lanes]);
+  }, [viewMonths, scenario, applyDragUpdate, captureHistorySnapshot, addAnchor, updateAnchor, anchors, lanes]);
 
   const handleCreateDrag = useCallback((
     e: React.MouseEvent,
