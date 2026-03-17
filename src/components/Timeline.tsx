@@ -680,7 +680,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
             style={{ left: `${todayPct}%` }}
           />
         )}
-        {hoveredIdx !== null && (() => {
+        {hoveredIdx !== null && hoveredAnchorId === null && (() => {
           const viewIdx = hoveredIdx - viewportStart;
           if (viewIdx < 0 || viewIdx >= viewMonths) return null;
           const pct = (viewIdx / (viewMonths - 1)) * 100;

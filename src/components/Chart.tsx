@@ -365,7 +365,7 @@ export function Chart({ result, accounts, scenario, visibleAccounts, viewportSta
   void visibleMonths;
 
   const crosshairX = (() => {
-    if (hoveredIdx === null || !layoutRef.current) return null;
+    if (hoveredIdx === null || hoveredAnchorId !== null || !layoutRef.current) return null;
     const viewIdx = hoveredIdx - viewportStart;
     const viewMonths = viewportEnd - viewportStart + 1;
     if (viewIdx < 0 || viewIdx >= viewMonths) return null;

@@ -5,7 +5,7 @@ import { Timeline } from "./components/Timeline";
 import { EditorPanel } from "./components/EditorPanel";
 import { Settings } from "./components/Settings";
 import { Legend } from "./components/Legend";
-import { monthsBetween } from "./utils/anchors";
+import { monthsBetween, addMonths } from "./utils/anchors";
 import { monthToLabel } from "./utils/formatting";
 import type { Account } from "./types";
 
@@ -405,10 +405,25 @@ export default function App() {
               return [{ anchor, pct: (monthIdx / (viewMonths - 1)) * 100 }];
             });
 
+            // Cursor label — only when not hovering over an existing anchor
+            const cursorViewIdx = hoveredIdx !== null && hoveredAnchorId === null
+              ? hoveredIdx - safeViewportStart : null;
+            const cursorPct = cursorViewIdx !== null && cursorViewIdx >= 0 && cursorViewIdx <= viewMonths - 1
+              ? (cursorViewIdx / (viewMonths - 1)) * 100 : null;
+            const cursorDate = cursorPct !== null ? addMonths(scenario.timelineStart, hoveredIdx!) : null;
+
             const MIN_LABEL_PX = 80;
             const innerWidth = (chartAreaRef.current?.clientWidth ?? 800) - CHART_MARGIN.left - CHART_MARGIN.right;
             const minPct = (MIN_LABEL_PX / innerWidth) * 100;
             const crowded = new Set<string>();
+
+            // Cursor takes precedence over everything nearby
+            if (cursorPct !== null) {
+              for (const p of positioned) {
+                if (Math.abs(p.pct - cursorPct) < minPct) crowded.add(p.anchor.id);
+              }
+            }
+
             for (let i = 0; i < positioned.length; i++) {
               for (let j = i + 1; j < positioned.length; j++) {
                 if (Math.abs(positioned[j].pct - positioned[i].pct) < minPct) {
@@ -430,13 +445,21 @@ export default function App() {
               }
             }
 
-            if (positioned.length === 0) return null;
+            if (positioned.length === 0 && cursorDate === null) return null;
             return (
               <div
                 className="flex-shrink-0 select-none"
                 style={{ height: 20, paddingLeft: CHART_MARGIN.left, paddingRight: CHART_MARGIN.right }}
               >
                 <div className="relative h-full">
+                {cursorDate !== null && cursorPct !== null && (
+                  <div
+                    className="absolute -translate-x-1/2 pointer-events-none"
+                    style={{ left: `${cursorPct}%`, top: 2, fontSize: 10, whiteSpace: "nowrap", color: "var(--anchor-label)" }}
+                  >
+                    {monthToLabel(cursorDate)}
+                  </div>
+                )}
                 {positioned.map(({ anchor, pct }) => {
                   const isFixed = !!anchor.fixed;
                   const isHovered = anchor.id === hoveredAnchorId;
