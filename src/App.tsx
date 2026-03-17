@@ -413,7 +413,7 @@ export default function App() {
             const cursorDate = cursorPct !== null ? addMonths(scenario.timelineStart, hoveredIdx!) : null;
 
             const MIN_LABEL_PX = 80;
-            const innerWidth = (chartAreaRef.current?.clientWidth ?? 800) - CHART_MARGIN.left - CHART_MARGIN.right;
+            const innerWidth = (chartAreaRef.current?.clientWidth ?? 800) - 16 - CHART_MARGIN.left - CHART_MARGIN.right;
             const minPct = (MIN_LABEL_PX / innerWidth) * 100;
             const crowded = new Set<string>();
 
@@ -449,7 +449,7 @@ export default function App() {
             return (
               <div
                 className="flex-shrink-0 select-none"
-                style={{ height: 20, paddingLeft: CHART_MARGIN.left, paddingRight: CHART_MARGIN.right }}
+                style={{ height: 20, paddingLeft: CHART_MARGIN.left + 8, paddingRight: CHART_MARGIN.right + 8 }}
               >
                 <div className="relative h-full">
                 {cursorDate !== null && cursorPct !== null && (
