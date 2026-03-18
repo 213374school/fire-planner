@@ -1827,3 +1827,26 @@ describe("P1: gains-only self-transfer with gains-fraction taxBasis: double-frac
     expect(result.principals["acc1"][0]).toBeCloseTo(8000);
   });
 });
+
+describe("P2: inflationAdjusted inbound contribution + gains-only self-rebalance in same month", () => {
+  it("inflation-scaled contribution correctly feeds into gains-only self-rebalance", () => {
+    // acc1: balance=10000, principal=5000 (gains=5000), no growth
+    // At i=12 (2025-01), inflationRate=0.03:
+    // Phase 1 — T1 inflationAdjusted: resolvedAmount = 2000 × 1.03 = 2060
+    //   → balance=12060, principal=7060, gains still=5000
+    // Phase 2 — T2 gains-only self-rebalance, taxRate=0.20 full:
+    //   resolvedAmount=5000, taxCost=1000 → balance=11060, principal=11060
+    // Without inflation scaling T1 would contribute 2000 → result would be 11000, not 11060
+    const acc1 = makeAccount({ id: "acc1", initialBalance: 10000, initialPrincipalRatio: 0.5, growthRate: 0 });
+    const t1 = makeTransfer({ id: "t1", sourceAccountId: null, targetAccountId: "acc1", amount: 2000, amountType: "fixed", inflationAdjusted: true, taxRate: 0, isOneTime: true, startDate: "2025-01" });
+    const t2 = makeTransfer({ id: "t2", sourceAccountId: "acc1", targetAccountId: "acc1", amountType: "gains-only", taxRate: 0.20, taxBasis: "full", isOneTime: true, startDate: "2025-01" });
+    const scenario = makeScenario({ accounts: [acc1], transfers: [t1, t2], timelineStart: "2024-01", timelineEnd: "2025-01", inflationRate: 0.03, inflationEnabled: true });
+    const result = runSimulation(scenario);
+    // Months before the transfers: untouched
+    expect(result.balances["acc1"][0]).toBeCloseTo(10000);
+    expect(result.principals["acc1"][0]).toBeCloseTo(5000);
+    // Month 12: inflation-scaled contribution fed through self-rebalance
+    expect(result.balances["acc1"][12]).toBeCloseTo(11060);
+    expect(result.principals["acc1"][12]).toBeCloseTo(11060);
+  });
+});
