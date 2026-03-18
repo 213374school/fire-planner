@@ -1827,3 +1827,30 @@ describe("O1: principal recovery after overdraft — clamp restores correctly on
     expect(result.principals["acc1"][1]).toBeCloseTo(1500);
   });
 });
+
+// ─── Section P: Gains-Only Self-Transfer + Gains-Fraction Tax Basis ──────────
+
+describe("P1: gains-only self-transfer with gains-fraction taxBasis: double-fraction reduces tax cost", () => {
+  it("taxCost = gains × (gains/balance) × taxRate; balance and principal reset to balance − taxCost", () => {
+    // acc1: balance=10000, principal=5000 (gainsRatio = 0.5)
+    // resolvedAmount = gains = 5000 (gains-only)
+    // gainsRatio = 5000/10000 = 0.5 (gains-fraction)
+    // taxCost = 5000 × 0.5 × 0.40 = 1000   ← half of full-basis (2000)
+    // balance = 10000 − 1000 = 9000; principal reset to 9000 (self-rebalance)
+    const acc1 = makeAccount({ id: "acc1", initialBalance: 10000, initialPrincipalRatio: 0.5, growthRate: 0 });
+    const t1 = makeTransfer({ id: "t1", sourceAccountId: "acc1", targetAccountId: "acc1", amountType: "gains-only", taxRate: 0.40, taxBasis: "gains-fraction", isOneTime: true });
+    const scenario = makeScenario({ accounts: [acc1], transfers: [t1] });
+    const result = runSimulation(scenario);
+    expect(result.balances["acc1"][0]).toBeCloseTo(9000);
+    expect(result.principals["acc1"][0]).toBeCloseTo(9000);
+  });
+
+  it("full-basis self-rebalance with same setup produces lower post-tax balance (2000 tax vs 1000)", () => {
+    const acc1 = makeAccount({ id: "acc1", initialBalance: 10000, initialPrincipalRatio: 0.5, growthRate: 0 });
+    const t1 = makeTransfer({ id: "t1", sourceAccountId: "acc1", targetAccountId: "acc1", amountType: "gains-only", taxRate: 0.40, taxBasis: "full", isOneTime: true });
+    const scenario = makeScenario({ accounts: [acc1], transfers: [t1] });
+    const result = runSimulation(scenario);
+    expect(result.balances["acc1"][0]).toBeCloseTo(8000);
+    expect(result.principals["acc1"][0]).toBeCloseTo(8000);
+  });
+});
