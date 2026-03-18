@@ -909,3 +909,610 @@ describe("Edge cases", () => {
     }
   });
 });
+
+// ─── SECTION A: Inflation Semantics ──────────────────────────────────────────
+
+describe("A1: Non-hedged invariant: real withdrawal = entered amount each month", () => {
+  it("reconstructed nominal withdrawal divided by deflator equals entered amount", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 100000, growthRate: 0 });
+    const t = makeTransfer({ amount: 1000, inflationHedged: false, isOneTime: false, period: "monthly" });
+    const scenario = makeScenario({ accounts: [acc], transfers: [t], inflationRate: 0.03, inflationEnabled: true, timelineEnd: "2024-06" });
+    const result = runSimulation(scenario);
+    const r = 0.03;
+    // Recover nominal balances: nomBal[i] = display[i] * (1+r)^(i/12)
+    // Nominal withdrawal at month i = nomBal[i-1] - nomBal[i]
+    // Real withdrawal = nomWithdrawal / deflator[i] = should be exactly 1000
+    for (let i = 1; i < 6; i++) {
+      const nomPrev = (result.balances["acc1"][i - 1] as number) * Math.pow(1 + r, (i - 1) / 12);
+      const nomCurr = (result.balances["acc1"][i] as number) * Math.pow(1 + r, i / 12);
+      const realWithdrawal = (nomPrev - nomCurr) / Math.pow(1 + r, i / 12);
+      expect(realWithdrawal).toBeCloseTo(1000, 4);
+    }
+  });
+});
+
+describe("A2: Hedged invariant: nominal withdrawal constant, real spending power shrinks", () => {
+  it("reconstructed nominal withdrawal is constant at entered amount", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 100000, growthRate: 0 });
+    const t = makeTransfer({ amount: 1000, inflationHedged: true, isOneTime: false, period: "monthly" });
+    const scenario = makeScenario({ accounts: [acc], transfers: [t], inflationRate: 0.03, inflationEnabled: true, timelineEnd: "2024-06" });
+    const result = runSimulation(scenario);
+    const r = 0.03;
+    for (let i = 1; i < 6; i++) {
+      const nomPrev = (result.balances["acc1"][i - 1] as number) * Math.pow(1 + r, (i - 1) / 12);
+      const nomCurr = (result.balances["acc1"][i] as number) * Math.pow(1 + r, i / 12);
+      expect(nomPrev - nomCurr).toBeCloseTo(1000, 4);
+    }
+  });
+
+  it("real purchasing power of each hedged withdrawal is strictly decreasing", () => {
+    const r = 0.03;
+    // Real cost of hedged withdrawal at month i = 1000 / (1+r)^(i/12) — decreases as i grows
+    const realCosts = Array.from({ length: 5 }, (_, k) => 1000 / Math.pow(1 + r, (k + 1) / 12));
+    for (let i = 1; i < realCosts.length; i++) {
+      expect(realCosts[i - 1]).toBeGreaterThan(realCosts[i]);
+    }
+  });
+});
+
+describe("A3: Non-hedged vs hedged: display balances diverge after month 0", () => {
+  it("both show same balance at i=0 (deflator=1), non-hedged lower thereafter", () => {
+    const mkSetup = (hedged: boolean) => {
+      const acc = makeAccount({ id: "acc1", initialBalance: 100000, growthRate: 0 });
+      const t = makeTransfer({ amount: 1000, inflationHedged: hedged, isOneTime: false, period: "monthly" });
+      return makeScenario({ accounts: [acc], transfers: [t], inflationRate: 0.03, inflationEnabled: true, timelineEnd: "2024-06" });
+    };
+    const rNH = runSimulation(mkSetup(false));
+    const rH  = runSimulation(mkSetup(true));
+    // At i=0: both scenarios withdraw 1000 nominal (deflator[0]=1, non-hedged scales by (1.03)^0=1)
+    expect(rNH.balances["acc1"][0]).toBeCloseTo(rH.balances["acc1"][0] as number, 4);
+    // At i>0: non-hedged withdraws more in nominal terms → lower displayed balance
+    for (let i = 1; i < 6; i++) {
+      expect(rNH.balances["acc1"][i] as number).toBeLessThan(rH.balances["acc1"][i] as number);
+    }
+  });
+});
+
+describe("A4: Inflation + Growth: real return ≈ (1 + growthRate) / (1 + inflationRate) - 1", () => {
+  it("real balance ratio between two consecutive yearly growth events matches formula", () => {
+    // Timeline 2024-01 to 2025-01: 13 months. Yearly growth fires at i=0 AND i=12.
+    const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0.07 });
+    const scenario = makeScenario({ accounts: [acc], timelineStart: "2024-01", timelineEnd: "2025-01", inflationRate: 0.02, inflationEnabled: true });
+    const result = runSimulation(scenario);
+    // i=0: growth fires → nominal=10700, deflator=1 → display=10700
+    expect(result.balances["acc1"][0]).toBeCloseTo(10700, 2);
+    // i=12: growth fires again → nominal=10700*1.07=11449, deflated by 1.02 → 11224.5
+    expect(result.balances["acc1"][12]).toBeCloseTo(10700 * 1.07 / 1.02, 2);
+    // Real return per year = balances[12]/balances[0] - 1 = 1.07/1.02 - 1 ≈ 4.9%
+    const realReturn = (result.balances["acc1"][12] as number) / (result.balances["acc1"][0] as number) - 1;
+    expect(realReturn).toBeCloseTo(1.07 / 1.02 - 1, 3);
+    // Principals not deflated: stays at initial value
+    expect(result.principals["acc1"][12]).toBeCloseTo(10000);
+  });
+});
+
+describe("A5: Inflation + Growth + Non-Hedged Transfer: full interaction", () => {
+  it("displayed balance matches manual month-by-month computation", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0.05, growthPeriod: "monthly" });
+    const t = makeTransfer({ amount: 200, inflationHedged: false, isOneTime: false, period: "monthly" });
+    const scenario = makeScenario({ accounts: [acc], transfers: [t], inflationRate: 0.02, inflationEnabled: true, timelineEnd: "2024-12" });
+    const result = runSimulation(scenario);
+    const r = 0.02;
+    const growthRate = Math.pow(1.05, 1 / 12) - 1;
+    let nomBal = 10000;
+    for (let i = 0; i < 12; i++) {
+      // Growth uses snapshot, withdrawal also uses snapshot: both apply to opening balance
+      nomBal = nomBal * (1 + growthRate) - 200 * Math.pow(1 + r, i / 12);
+      const expected = nomBal / Math.pow(1 + r, i / 12);
+      expect(result.balances["acc1"][i]).toBeCloseTo(expected, 1);
+    }
+  });
+});
+
+describe("A6: Gains-fraction tax uses nominal values, not real values", () => {
+  it("tax cost is identical with and without inflation; displays differ only by deflation", () => {
+    const mkSetup = (withInflation: boolean) => {
+      const acc = makeAccount({ id: "acc1", initialBalance: 10000, initialPrincipalRatio: 0.5, growthRate: 0 });
+      const t = makeTransfer({ amount: 1000, taxRate: 0.30, taxBasis: "gains-fraction", isOneTime: true, startDate: "2024-01" });
+      return makeScenario({
+        accounts: [acc], transfers: [t],
+        timelineStart: "2024-01", timelineEnd: "2025-01",
+        inflationRate: 0.02, inflationEnabled: withInflation,
+      });
+    };
+    const rInfl = runSimulation(mkSetup(true));
+    const rNone = runSimulation(mkSetup(false));
+    // At i=0 deflator=1: both show same displayed balance
+    expect(rInfl.balances["acc1"][0]).toBeCloseTo(rNone.balances["acc1"][0] as number, 4);
+    // At i=12: inflation version is deflated; no-inflation version is nominal
+    const nomAtMonth12 = rNone.balances["acc1"][12] as number;
+    expect(rInfl.balances["acc1"][12]).toBeCloseTo(nomAtMonth12 / 1.02, 2);
+  });
+});
+
+describe("A7: Inflation deflation with negative balance", () => {
+  it("negative nominal balance is deflated: debt worth less in real terms", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 1000, growthRate: 0 });
+    const t = makeTransfer({ amount: 1000, isOneTime: false, period: "monthly" });
+    const scenario = makeScenario({ accounts: [acc], transfers: [t], inflationRate: 0.03, inflationEnabled: true, timelineEnd: "2024-03" });
+    const result = runSimulation(scenario);
+    // i=0: 1000 - 1000 = 0 (deflator=1)
+    expect(result.balances["acc1"][0]).toBeCloseTo(0);
+    // i=1: nominal = 0 - 1000 = -1000; real = -1000 / (1.03)^(1/12) ≈ -997.5 (less negative)
+    expect(result.balances["acc1"][1]).toBeCloseTo(-1000 / Math.pow(1.03, 1 / 12), 2);
+    // i=2: nominal = -1000 - 1000 = -2000; real = -2000 / (1.03)^(2/12)
+    expect(result.balances["acc1"][2]).toBeCloseTo(-2000 / Math.pow(1.03, 2 / 12), 2);
+  });
+});
+
+describe("A8: All accounts deflated independently by the same deflator", () => {
+  it("two accounts with different balances are each deflated correctly at i=12", () => {
+    const acc1 = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0 });
+    const acc2 = makeAccount({ id: "acc2", initialBalance: 5000, growthRate: 0 });
+    const scenario = makeScenario({
+      accounts: [acc1, acc2],
+      timelineStart: "2024-01", timelineEnd: "2025-01",
+      inflationRate: 0.04, inflationEnabled: true,
+    });
+    const result = runSimulation(scenario);
+    expect(result.balances["acc1"][12]).toBeCloseTo(10000 / 1.04, 2);
+    expect(result.balances["acc2"][12]).toBeCloseTo(5000 / 1.04, 2);
+  });
+});
+
+// ─── SECTION B: Growth Period Completeness ────────────────────────────────────
+
+describe("B1: Half-yearly growth fires at i=0 and i=6 with correct period rate", () => {
+  it("balance changes only at half-year marks using (1+annual)^(6/12)-1 rate", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0.08, growthPeriod: "half-yearly" });
+    const scenario = makeScenario({ accounts: [acc], timelineEnd: "2024-12" });
+    const result = runSimulation(scenario);
+    const hr = Math.pow(1.08, 6 / 12) - 1;
+    const b0 = 10000 * (1 + hr);
+    expect(result.balances["acc1"][0]).toBeCloseTo(b0, 2);
+    for (let i = 1; i < 6; i++) {
+      expect(result.balances["acc1"][i]).toBeCloseTo(b0, 2);
+    }
+    const b6 = b0 * (1 + hr);
+    expect(result.balances["acc1"][6]).toBeCloseTo(b6, 2);
+    for (let i = 7; i < 12; i++) {
+      expect(result.balances["acc1"][i]).toBeCloseTo(b6, 2);
+    }
+  });
+});
+
+describe("B2: Zero growth rate: balance never changes from growth alone", () => {
+  it("all 12 months remain at initial balance", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0, growthPeriod: "monthly" });
+    const scenario = makeScenario({ accounts: [acc], timelineEnd: "2024-12" });
+    const result = runSimulation(scenario);
+    for (let i = 0; i < 12; i++) {
+      expect(result.balances["acc1"][i]).toBeCloseTo(10000);
+    }
+  });
+});
+
+describe("B3: Negative growth rate (depreciation)", () => {
+  it("balance decreases by exactly annual rate when yearly growth fires at i=0", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: -0.10, growthPeriod: "yearly" });
+    // 12-month timeline: yearly growth fires only at i=0
+    const scenario = makeScenario({ accounts: [acc], timelineEnd: "2024-12" });
+    const result = runSimulation(scenario);
+    // i=0: growth fires → 10000 * 0.90 = 9000
+    expect(result.balances["acc1"][0]).toBeCloseTo(9000, 1);
+    // Stays at 9000 for remaining months (no second firing in 12-month window)
+    for (let i = 1; i < 12; i++) {
+      expect(result.balances["acc1"][i]).toBeCloseTo(9000, 1);
+    }
+    // Principal unchanged by depreciation
+    expect(result.principals["acc1"][11]).toBeCloseTo(10000);
+  });
+});
+
+describe("B4: Yearly growth fires again at i=12 (year boundary)", () => {
+  it("balance at i=11 is 11000 and at i=12 is 12100 after two yearly firings", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0.10, growthPeriod: "yearly" });
+    const scenario = makeScenario({ accounts: [acc], timelineStart: "2024-01", timelineEnd: "2025-01" });
+    const result = runSimulation(scenario);
+    expect(result.balances["acc1"][0]).toBeCloseTo(11000, 1);
+    expect(result.balances["acc1"][11]).toBeCloseTo(11000, 1);
+    expect(result.balances["acc1"][12]).toBeCloseTo(12100, 0);
+  });
+});
+
+describe("B5: Monthly growth compounds to exact annual rate over 12 months", () => {
+  it("balance at i=11 equals initialBalance * (1 + annualRate)", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0.06, growthPeriod: "monthly" });
+    const scenario = makeScenario({ accounts: [acc], timelineEnd: "2024-12" });
+    const result = runSimulation(scenario);
+    expect(result.balances["acc1"][11]).toBeCloseTo(10000 * 1.06, 3);
+  });
+});
+
+// ─── SECTION C: Principal Tracking Deep Cases ────────────────────────────────
+
+describe("C1: Zero-balance source: principal guard prevents division by zero", () => {
+  it("principal stays 0 (not -1000) when withdrawing from zero-balance account", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 0, growthRate: 0 });
+    const t = makeTransfer({ amount: 1000, isOneTime: true });
+    const scenario = makeScenario({ accounts: [acc], transfers: [t] });
+    const result = runSimulation(scenario);
+    expect(result.balances["acc1"][0]).toBeCloseTo(-1000);
+    expect(result.principals["acc1"][0]).toBeCloseTo(0);
+  });
+});
+
+describe("C2: Sequential withdrawals maintain proportional principal ratio", () => {
+  it("principal/balance ratio stays at 0.4 through 3 monthly withdrawals", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 10000, initialPrincipalRatio: 0.4, growthRate: 0 });
+    const t = makeTransfer({ amount: 2000, isOneTime: false, period: "monthly" });
+    const scenario = makeScenario({ accounts: [acc], transfers: [t], timelineEnd: "2024-03" });
+    const result = runSimulation(scenario);
+    expect(result.balances["acc1"][0]).toBeCloseTo(8000);
+    expect(result.principals["acc1"][0]).toBeCloseTo(3200);
+    expect(result.balances["acc1"][1]).toBeCloseTo(6000);
+    expect(result.principals["acc1"][1]).toBeCloseTo(2400);
+    expect(result.balances["acc1"][2]).toBeCloseTo(4000);
+    expect(result.principals["acc1"][2]).toBeCloseTo(1600);
+    // Ratio maintained at 0.4 each step
+    for (let i = 0; i < 3; i++) {
+      const ratio = (result.principals["acc1"][i] as number) / (result.balances["acc1"][i] as number);
+      expect(ratio).toBeCloseTo(0.4, 6);
+    }
+  });
+});
+
+describe("C3: Two simultaneous withdrawals from same account use opening snapshot principal fraction", () => {
+  it("both principal debits computed from opening snapshot; ratio preserved", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 10000, initialPrincipalRatio: 0.5, growthRate: 0 });
+    const t1 = makeTransfer({ id: "t1", amount: 2000, isOneTime: true });
+    const t2 = makeTransfer({ id: "t2", amount: 3000, isOneTime: true });
+    const scenario = makeScenario({ accounts: [acc], transfers: [t1, t2] });
+    const result = runSimulation(scenario);
+    // balance = 10000 - 2000 - 3000 = 5000
+    expect(result.balances["acc1"][0]).toBeCloseTo(5000);
+    // principal: opening fraction = 5000/10000 = 0.5; debit = (2000+3000)*0.5 = 2500
+    expect(result.principals["acc1"][0]).toBeCloseTo(2500);
+    // Ratio still 0.5
+    expect((result.principals["acc1"][0] as number) / (result.balances["acc1"][0] as number)).toBeCloseTo(0.5, 6);
+  });
+});
+
+describe("C4: Target account receives gains transfer: netToTarget becomes new principal", () => {
+  it("target balance and principal both equal netToTarget after gains-only transfer", () => {
+    const src = makeAccount({ id: "acc1", initialBalance: 10000, initialPrincipalRatio: 0.5, growthRate: 0 });
+    const tgt = makeAccount({ id: "acc2", initialBalance: 0, growthRate: 0 });
+    const t = makeTransfer({ sourceAccountId: "acc1", targetAccountId: "acc2", amountType: "gains-only", taxRate: 0.20, taxBasis: "full", isOneTime: true });
+    const scenario = makeScenario({ accounts: [src, tgt], transfers: [t] });
+    const result = runSimulation(scenario);
+    // gains = 10000 - 5000 = 5000; taxCost = 5000*0.20=1000; netToTarget = 4000
+    expect(result.balances["acc2"][0]).toBeCloseTo(4000);
+    expect(result.principals["acc2"][0]).toBeCloseTo(4000);
+    // Gains ratio on target = 0 (all principal)
+    expect((result.balances["acc2"][0] as number) - (result.principals["acc2"][0] as number)).toBeCloseTo(0);
+  });
+});
+
+describe("C5: After receiving gains-only transfer (all principal), subsequent gains-fraction tax is zero", () => {
+  it("gainsRatio = 0 when account received transfer as all-principal; no tax on withdrawal", () => {
+    // Target starts with 4000 all-principal (as in C4 outcome)
+    const tgt = makeAccount({ id: "acc2", initialBalance: 4000, initialPrincipalRatio: 1.0, growthRate: 0 });
+    const withdraw = makeTransfer({ id: "t2", sourceAccountId: "acc2", targetAccountId: null, amount: 2000, taxRate: 0.30, taxBasis: "gains-fraction", isOneTime: true });
+    const scenario = makeScenario({ accounts: [tgt], transfers: [withdraw] });
+    const result = runSimulation(scenario);
+    // gainsRatio = (4000-4000)/4000 = 0; taxCost = 0; balance drops by exactly 2000
+    expect(result.balances["acc2"][0]).toBeCloseTo(2000);
+    expect(result.principals["acc2"][0]).toBeCloseTo(2000);
+  });
+});
+
+// ─── SECTION D: Transfer Scheduling Edge Cases ───────────────────────────────
+
+describe("D1: startDate=null defaults to timelineStart", () => {
+  it("null startDate produces identical result to explicit timelineStart", () => {
+    const mkSetup = (sd: string | null) => {
+      const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0 });
+      const t = makeTransfer({ amount: 500, isOneTime: false, period: "monthly", startDate: sd });
+      return makeScenario({ accounts: [acc], transfers: [t] });
+    };
+    const rNull = runSimulation(mkSetup(null));
+    const rExpl = runSimulation(mkSetup("2024-01"));
+    for (let i = 0; i < 12; i++) {
+      expect(rNull.balances["acc1"][i]).toBeCloseTo(rExpl.balances["acc1"][i] as number, 6);
+    }
+  });
+});
+
+describe("D2: Quarterly transfer starting mid-year fires on startDate offset, not calendar", () => {
+  it("fires at i=3,6,9,12 when startDate=2024-04 in a Jan 2024 to Mar 2025 timeline", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0 });
+    const t = makeTransfer({ amount: 500, isOneTime: false, period: "quarterly", startDate: "2024-04" });
+    const scenario = makeScenario({ accounts: [acc], transfers: [t], timelineStart: "2024-01", timelineEnd: "2025-03" });
+    const result = runSimulation(scenario);
+    const firingMonths = new Set([3, 6, 9, 12]);
+    // Count total firings: 4 × 500 = 2000 reduction
+    let expected = 10000;
+    for (let i = 0; i < 15; i++) {
+      if (firingMonths.has(i)) expected -= 500;
+      expect(result.balances["acc1"][i]).toBeCloseTo(expected, 4);
+    }
+  });
+});
+
+describe("D3: Transfer startDate exactly at timelineEnd fires in last month", () => {
+  it("one-time transfer at 2024-12 fires at i=11 (last month)", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0 });
+    const t = makeTransfer({ amount: 1000, isOneTime: true, startDate: "2024-12" });
+    const scenario = makeScenario({ accounts: [acc], transfers: [t], timelineEnd: "2024-12" });
+    const result = runSimulation(scenario);
+    for (let i = 0; i < 11; i++) {
+      expect(result.balances["acc1"][i]).toBeCloseTo(10000);
+    }
+    expect(result.balances["acc1"][11]).toBeCloseTo(9000);
+  });
+});
+
+describe("D4: Transfer startDate after timelineEnd: never fires", () => {
+  it("balance unchanged for all 12 months when startDate is beyond timeline", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0 });
+    const t = makeTransfer({ amount: 5000, isOneTime: true, startDate: "2025-06" });
+    const scenario = makeScenario({ accounts: [acc], timelineEnd: "2024-12" });
+    const result = runSimulation(scenario);
+    for (let i = 0; i < 12; i++) {
+      expect(result.balances["acc1"][i]).toBeCloseTo(10000);
+    }
+  });
+});
+
+describe("D5: endDate = startDate: recurring transfer fires exactly once", () => {
+  it("monthly transfer with startDate=endDate=2024-03 fires only at i=2", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0 });
+    const t = makeTransfer({ amount: 500, isOneTime: false, period: "monthly", startDate: "2024-03", endDate: "2024-03" });
+    const scenario = makeScenario({ accounts: [acc], transfers: [t], timelineEnd: "2024-06" });
+    const result = runSimulation(scenario);
+    expect(result.balances["acc1"][0]).toBeCloseTo(10000);
+    expect(result.balances["acc1"][1]).toBeCloseTo(10000);
+    expect(result.balances["acc1"][2]).toBeCloseTo(9500);
+    expect(result.balances["acc1"][3]).toBeCloseTo(9500);
+    expect(result.balances["acc1"][4]).toBeCloseTo(9500);
+    expect(result.balances["acc1"][5]).toBeCloseTo(9500);
+  });
+});
+
+describe("D6: Half-yearly transfer starting mid-year fires 6 months apart from startDate", () => {
+  it("fires at i=3 (2024-04) and i=9 (2024-10) in a 2024 calendar year timeline", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0 });
+    const t = makeTransfer({ amount: 1000, isOneTime: false, period: "half-yearly", startDate: "2024-04" });
+    const scenario = makeScenario({ accounts: [acc], transfers: [t], timelineEnd: "2024-12" });
+    const result = runSimulation(scenario);
+    const firingMonths = new Set([3, 9]);
+    let expected = 10000;
+    for (let i = 0; i < 12; i++) {
+      if (firingMonths.has(i)) expected -= 1000;
+      expect(result.balances["acc1"][i]).toBeCloseTo(expected, 4);
+    }
+  });
+});
+
+// ─── SECTION E: Growth Interaction With Transfers ────────────────────────────
+
+describe("E1: Monthly growth and monthly transfer both use opening snapshot", () => {
+  it("result = snapshot * (1+rate) - withdrawal, not sequential application", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0.12, growthPeriod: "monthly" });
+    const t = makeTransfer({ amount: 500, isOneTime: false, period: "monthly" });
+    const scenario = makeScenario({ accounts: [acc], transfers: [t], timelineEnd: "2024-02" });
+    const result = runSimulation(scenario);
+    const monthlyRate = Math.pow(1.12, 1 / 12) - 1;
+    const expected = 10000 * (1 + monthlyRate) - 500;
+    expect(result.balances["acc1"][0]).toBeCloseTo(expected, 3);
+    // Wrong order would give: (10000 - 500) * (1 + monthlyRate) — different from above
+    expect(result.balances["acc1"][0]).not.toBeCloseTo((10000 - 500) * (1 + monthlyRate), 1);
+  });
+});
+
+describe("E2: Yearly growth fires at i=0 regardless of calendar month", () => {
+  it("growth fires at i=0 (June) and i=12 (June next year), not on January", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0.10, growthPeriod: "yearly" });
+    const scenario = makeScenario({ accounts: [acc], timelineStart: "2024-06", timelineEnd: "2025-06" });
+    const result = runSimulation(scenario);
+    expect(result.balances["acc1"][0]).toBeCloseTo(11000, 1);
+    for (let i = 1; i < 12; i++) {
+      expect(result.balances["acc1"][i]).toBeCloseTo(11000, 1);
+    }
+    expect(result.balances["acc1"][12]).toBeCloseTo(12100, 1);
+  });
+});
+
+// ─── SECTION F: Output Shape and Determinism ─────────────────────────────────
+
+describe("F1: months array has correct YYYY-MM values spanning the timeline", () => {
+  it("months from 2024-10 to 2025-03 are correct in order", () => {
+    const scenario = makeScenario({ timelineStart: "2024-10", timelineEnd: "2025-03" });
+    const result = runSimulation(scenario);
+    expect(result.months).toEqual(["2024-10", "2024-11", "2024-12", "2025-01", "2025-02", "2025-03"]);
+  });
+});
+
+describe("F2: months array length equals number of months in range (inclusive)", () => {
+  it("1-month, 12-month, and 25-month timelines have correct lengths", () => {
+    const single = makeScenario({ timelineStart: "2024-06", timelineEnd: "2024-06" });
+    expect(runSimulation(single).months).toHaveLength(1);
+    const twelve = makeScenario({ timelineStart: "2024-01", timelineEnd: "2024-12" });
+    expect(runSimulation(twelve).months).toHaveLength(12);
+    const twentyfive = makeScenario({ timelineStart: "2024-01", timelineEnd: "2026-01" });
+    expect(runSimulation(twentyfive).months).toHaveLength(25);
+  });
+});
+
+describe("F3: Long-running simulation (30 years) produces no NaN or Infinity", () => {
+  it("all 360 balance values are finite numbers", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 100000, growthRate: 0.07, growthPeriod: "monthly" });
+    const t = makeTransfer({ amount: 500, isOneTime: false, period: "monthly" });
+    const scenario = makeScenario({
+      accounts: [acc], transfers: [t],
+      timelineStart: "2024-01", timelineEnd: "2053-12",
+      inflationRate: 0.02, inflationEnabled: true,
+    });
+    const result = runSimulation(scenario);
+    expect(result.months).toHaveLength(360);
+    for (let i = 0; i < 360; i++) {
+      const val = result.balances["acc1"][i] as number;
+      expect(isNaN(val)).toBe(false);
+      expect(isFinite(val)).toBe(true);
+    }
+  });
+});
+
+// ─── SECTION G: Additional Edge Cases ────────────────────────────────────────
+
+describe("G1: Two incoming transfers to same account in same month accumulate additively", () => {
+  it("target receives sum of both transfers; principal = total received", () => {
+    const src1 = makeAccount({ id: "acc1", initialBalance: 5000, growthRate: 0 });
+    const src2 = makeAccount({ id: "acc2", initialBalance: 8000, growthRate: 0 });
+    const tgt  = makeAccount({ id: "acc3", initialBalance: 0, growthRate: 0 });
+    const t1 = makeTransfer({ id: "t1", sourceAccountId: "acc1", targetAccountId: "acc3", amount: 1000, isOneTime: true });
+    const t2 = makeTransfer({ id: "t2", sourceAccountId: "acc2", targetAccountId: "acc3", amount: 2000, isOneTime: true });
+    const scenario = makeScenario({ accounts: [src1, src2, tgt], transfers: [t1, t2] });
+    const result = runSimulation(scenario);
+    expect(result.balances["acc3"][0]).toBeCloseTo(3000);
+    expect(result.principals["acc3"][0]).toBeCloseTo(3000);
+  });
+});
+
+describe("G2: Null source AND null target with non-zero taxRate: no accounts affected", () => {
+  it("non-zero tax rate with null source/target causes no balance changes", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 5000, growthRate: 0 });
+    const t = makeTransfer({ sourceAccountId: null, targetAccountId: null, amount: 1000, taxRate: 0.30, isOneTime: true });
+    const scenario = makeScenario({ accounts: [acc], transfers: [t] });
+    const result = runSimulation(scenario);
+    expect(result.balances["acc1"][0]).toBeCloseTo(5000);
+  });
+});
+
+describe("G3: Self-transfer with fixed amount (not gains-only): taxCost is net loss", () => {
+  it("source=target fixed transfer results in balance reduced by taxCost only", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 10000, initialPrincipalRatio: 1, growthRate: 0 });
+    const t = makeTransfer({ sourceAccountId: "acc1", targetAccountId: "acc1", amount: 1000, taxRate: 0.20, taxBasis: "full", isOneTime: true });
+    const scenario = makeScenario({ accounts: [acc], transfers: [t] });
+    const result = runSimulation(scenario);
+    // Deduct 1000 from source, credit 800 to target (same account): net = -200
+    expect(result.balances["acc1"][0]).toBeCloseTo(9800);
+    expect(result.principals["acc1"][0]).toBeCloseTo(9800);
+  });
+});
+
+describe("G4: Gains-only transfer with zero tax rate transfers all gains to target", () => {
+  it("source retains principal, target receives full gains when taxRate=0", () => {
+    const src = makeAccount({ id: "acc1", initialBalance: 10000, initialPrincipalRatio: 1, growthRate: 0.50, growthPeriod: "yearly" });
+    const tgt = makeAccount({ id: "acc2", initialBalance: 0, growthRate: 0 });
+    // Transfer fires at month 1 (after growth at month 0)
+    const t = makeTransfer({ sourceAccountId: "acc1", targetAccountId: "acc2", amountType: "gains-only", taxRate: 0, isOneTime: true, startDate: "2024-02" });
+    const scenario = makeScenario({ accounts: [src, tgt], transfers: [t], timelineEnd: "2024-03" });
+    const result = runSimulation(scenario);
+    // After month 0: acc1 balance=15000, principal=10000 (growth doesn't change principal)
+    // Month 1: gains=15000-10000=5000, taxCost=0, netToTarget=5000
+    // acc1: 15000-5000=10000; principal: 10000 - 5000*(10000/15000) = 10000 - 3333.33 = 6666.67
+    expect(result.balances["acc1"][1]).toBeCloseTo(10000, 1);
+    expect(result.balances["acc2"][1]).toBeCloseTo(5000, 1);
+    expect(result.principals["acc1"][1]).toBeCloseTo(10000 - 5000 * (10000 / 15000), 1);
+    expect(result.principals["acc2"][1]).toBeCloseTo(5000, 1);
+  });
+});
+
+describe("G5: Very high inflation rate (50% annual)", () => {
+  it("balance at i=12 is deflated by 1.50", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0 });
+    const scenario = makeScenario({ accounts: [acc], timelineStart: "2024-01", timelineEnd: "2025-01", inflationRate: 0.50, inflationEnabled: true });
+    const result = runSimulation(scenario);
+    expect(result.balances["acc1"][12]).toBeCloseTo(10000 / 1.50, 2);
+  });
+
+  it("non-hedged nominal withdrawal at i=6 scales by (1.5)^(6/12)", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 100000, growthRate: 0 });
+    const t = makeTransfer({ amount: 1000, inflationHedged: false, isOneTime: false, period: "monthly" });
+    const scenario = makeScenario({ accounts: [acc], transfers: [t], inflationRate: 0.50, inflationEnabled: true, timelineEnd: "2024-07" });
+    const result = runSimulation(scenario);
+    const r = 0.50;
+    // Verify real withdrawal at i=6 = 1000
+    const nomPrev = (result.balances["acc1"][5] as number) * Math.pow(1 + r, 5 / 12);
+    const nomCurr = (result.balances["acc1"][6] as number) * Math.pow(1 + r, 6 / 12);
+    const realWithdrawal = (nomPrev - nomCurr) / Math.pow(1 + r, 6 / 12);
+    expect(realWithdrawal).toBeCloseTo(1000, 2);
+  });
+});
+
+describe("G6: initialPrincipalRatio=0: gains-fraction tax applies at full rate always", () => {
+  it("account with zero cost basis incurs full tax rate on gains-fraction withdrawal", () => {
+    const src = makeAccount({ id: "acc1", initialBalance: 10000, initialPrincipalRatio: 0, growthRate: 0.20, growthPeriod: "yearly" });
+    const tgt = makeAccount({ id: "acc2", initialBalance: 0, growthRate: 0 });
+    // Transfer at month 1: gains-fraction 30% from acc1 to acc2
+    const t = makeTransfer({ sourceAccountId: "acc1", targetAccountId: "acc2", amount: 2000, taxRate: 0.30, taxBasis: "gains-fraction", isOneTime: true, startDate: "2024-02" });
+    const scenario = makeScenario({ accounts: [src, tgt], transfers: [t], timelineEnd: "2024-03" });
+    const result = runSimulation(scenario);
+    // After i=0: acc1 balance = 12000, principal = 0 (growth doesn't change principal)
+    // At i=1: gainsRatio = (12000-0)/12000 = 1.0; taxCost = 2000*1.0*0.30 = 600; netToTarget = 1400
+    expect(result.balances["acc2"][1]).toBeCloseTo(1400, 1);
+    expect(result.principals["acc2"][1]).toBeCloseTo(1400, 1);
+  });
+});
+
+describe("G7: Yearly transfer starting mid-year fires on startDate offset", () => {
+  it("yearly transfer from 2024-07 fires at i=6, i=18, i=30 in a 31-month timeline", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0 });
+    const t = makeTransfer({ amount: 1000, isOneTime: false, period: "yearly", startDate: "2024-07" });
+    const scenario = makeScenario({ accounts: [acc], transfers: [t], timelineStart: "2024-01", timelineEnd: "2026-07" });
+    const result = runSimulation(scenario);
+    const firingIndices = new Set([6, 18, 30]);
+    let expected = 10000;
+    for (let i = 0; i < 31; i++) {
+      if (firingIndices.has(i)) expected -= 1000;
+      expect(result.balances["acc1"][i]).toBeCloseTo(expected, 4);
+    }
+  });
+});
+
+// ─── SECTION H: Integration Tests ────────────────────────────────────────────
+
+describe("H1: Retirement drawdown scenario: portfolio survives 20 years", () => {
+  it("$500k at 6% growth with $2500/month non-hedged at 2% inflation stays positive for 240 months", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 500000, growthRate: 0.06, growthPeriod: "yearly", initialPrincipalRatio: 1 });
+    const t = makeTransfer({ amount: 2500, inflationHedged: false, isOneTime: false, period: "monthly" });
+    const scenario = makeScenario({
+      accounts: [acc], transfers: [t],
+      timelineStart: "2024-01", timelineEnd: "2043-12",
+      inflationRate: 0.02, inflationEnabled: true,
+    });
+    const result = runSimulation(scenario);
+    expect(result.months).toHaveLength(240);
+    expect(result.balances["acc1"][239] as number).toBeGreaterThan(0);
+  });
+});
+
+describe("H2: Transfer chain A→B→C uses opening snapshots throughout", () => {
+  it("C receives from B's opening balance, not B's post-credit balance", () => {
+    const accA = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0 });
+    const accB = makeAccount({ id: "acc2", initialBalance: 5000, growthRate: 0 });
+    const accC = makeAccount({ id: "acc3", initialBalance: 0, growthRate: 0 });
+    const t1 = makeTransfer({ id: "t1", sourceAccountId: "acc1", targetAccountId: "acc2", amount: 2000, isOneTime: true });
+    const t2 = makeTransfer({ id: "t2", sourceAccountId: "acc2", targetAccountId: "acc3", amount: 1000, isOneTime: true });
+    const scenario = makeScenario({ accounts: [accA, accB, accC], transfers: [t1, t2] });
+    const result = runSimulation(scenario);
+    expect(result.balances["acc1"][0]).toBeCloseTo(8000);
+    expect(result.balances["acc2"][0]).toBeCloseTo(6000); // +2000 from A, -1000 to C = net +1000
+    expect(result.balances["acc3"][0]).toBeCloseTo(1000); // gets $1000 from B's opening $5000
+  });
+});
+
+describe("H3: Account fully drained then receives contribution", () => {
+  it("zero-balance account correctly accepts new contribution with correct principal", () => {
+    const acc = makeAccount({ id: "acc1", initialBalance: 1000, initialPrincipalRatio: 1, growthRate: 0 });
+    const drain = makeTransfer({ id: "t1", amount: 1000, isOneTime: true, startDate: "2024-01" });
+    const contrib = makeTransfer({ id: "t2", sourceAccountId: null, targetAccountId: "acc1", amount: 2000, isOneTime: true, startDate: "2024-02" });
+    const scenario = makeScenario({ accounts: [acc], transfers: [drain, contrib], timelineEnd: "2024-03" });
+    const result = runSimulation(scenario);
+    expect(result.balances["acc1"][0]).toBeCloseTo(0);
+    expect(result.principals["acc1"][0]).toBeCloseTo(0);
+    expect(result.balances["acc1"][1]).toBeCloseTo(2000);
+    expect(result.principals["acc1"][1]).toBeCloseTo(2000);
+  });
+});
