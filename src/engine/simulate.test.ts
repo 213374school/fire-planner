@@ -132,7 +132,7 @@ describe("Case 7: Inflation adjustment", () => {
     const transfer = makeTransfer({ amount: 1000, inflationAdjusted: true, isOneTime: true, startDate: "2025-01" });
     const scenario = makeScenario({ accounts: [acc], transfers: [transfer], timelineStart: "2024-01", timelineEnd: "2025-02", inflationRate: 0.02, inflationEnabled: true });
     const result = runSimulation(scenario);
-    expect(result.balances["acc1"][12]).toBeCloseTo(98980 / 1.02, 1);
+    expect(result.balances["acc1"][12]).toBeCloseTo(98980, 1);
   });
 
   it("fixed-nominal transfer does NOT inflate: nominal withdrawal at month 12 stays 1000", () => {
@@ -140,7 +140,7 @@ describe("Case 7: Inflation adjustment", () => {
     const transfer = makeTransfer({ amount: 1000, inflationAdjusted: false, isOneTime: true, startDate: "2025-01" });
     const scenario = makeScenario({ accounts: [acc], transfers: [transfer], timelineStart: "2024-01", timelineEnd: "2025-02", inflationRate: 0.02, inflationEnabled: true });
     const result = runSimulation(scenario);
-    expect(result.balances["acc1"][12]).toBeCloseTo(99000 / 1.02, 1);
+    expect(result.balances["acc1"][12]).toBeCloseTo(99000, 1);
   });
 
   it("missing inflationAdjusted field defaults to false (fixed nominal)", () => {
@@ -688,41 +688,32 @@ describe("Growth: period alignment", () => {
 
 // ─── Inflation: deflation display transform ───────────────────────────────────
 
-describe("Inflation: deflation display transform", () => {
-  it("inflationEnabled=false: balances are nominal regardless of inflationRate", () => {
+describe("Inflation: engine output is always nominal", () => {
+  it("inflationEnabled=false: balances are nominal", () => {
     const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0.10, growthPeriod: "yearly" });
-    // 12-month timeline: growth fires at i=0 only (i=12 would be next year)
     const scenario = makeScenario({ accounts: [acc], inflationEnabled: false, inflationRate: 0.05, timelineEnd: "2024-12" });
     const result = runSimulation(scenario);
     expect(result.balances["acc1"][11]).toBeCloseTo(11000, 0);
   });
 
-  it("inflationEnabled=true: balance at i=0 is undeflated (deflator=1)", () => {
-    const acc = makeAccount({ id: "acc1", initialBalance: 10000 });
-    const scenario = makeScenario({ accounts: [acc], inflationEnabled: true, inflationRate: 0.02 });
-    const result = runSimulation(scenario);
-    // Deflator at i=0: 1.02^(0/12) = 1 → balance unchanged
-    expect(result.balances["acc1"][0]).toBeCloseTo(10000);
-  });
-
-  it("inflationEnabled=true: balance at i=12 deflated by annual rate", () => {
+  it("inflationEnabled=true: balances are still nominal (deflation is a display-layer concern)", () => {
     const acc = makeAccount({ id: "acc1", initialBalance: 10000 });
     const scenario = makeScenario({ accounts: [acc], inflationEnabled: true, inflationRate: 0.02, timelineEnd: "2025-01" });
     const result = runSimulation(scenario);
-    // No growth, no transfers: nominal stays 10000. Real at i=12 = 10000/1.02 ≈ 9803.92
-    expect(result.balances["acc1"][12]).toBeCloseTo(10000 / 1.02, 1);
+    // No growth, no transfers: nominal balance stays 10000 at all months
+    expect(result.balances["acc1"][0]).toBeCloseTo(10000);
+    expect(result.balances["acc1"][12]).toBeCloseTo(10000);
   });
 
-  it("principals are NOT deflated even when inflation is enabled", () => {
+  it("balances and principals are both nominal; they are comparable in the same units", () => {
     const acc = makeAccount({ id: "acc1", initialBalance: 10000 });
     const scenario = makeScenario({ accounts: [acc], inflationEnabled: true, inflationRate: 0.05, timelineEnd: "2025-01" });
     const result = runSimulation(scenario);
-    // Principal stays at nominal 10000 (no growth, no transfers)
+    expect(result.balances["acc1"][12]).toBeCloseTo(10000);
     expect(result.principals["acc1"][12]).toBeCloseTo(10000);
   });
 
-  it("inflationRate=0 with inflationEnabled=true: no deflation applied", () => {
-    // inflationRate !== 0 guard prevents the deflation loop from running
+  it("inflationRate=0 with inflationEnabled=true: no scaling and no deflation", () => {
     const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0.10, growthPeriod: "yearly" });
     const scenario = makeScenario({ accounts: [acc], inflationEnabled: true, inflationRate: 0, timelineEnd: "2024-12" });
     const result = runSimulation(scenario);
@@ -758,22 +749,22 @@ describe("Inflation: fixed transfer adjustment — no inflation", () => {
 });
 
 describe("Inflation: fixed transfer adjustment — with inflation", () => {
-  it("inflation-adjusted at i=0: deflator=1, withdrawal is exactly the entered amount", () => {
+  it("inflation-adjusted at i=0: scaling factor = 1.02^0 = 1, withdrawal is exactly the entered amount", () => {
     const acc = makeAccount({ id: "acc1", initialBalance: 100000 });
     const t = makeTransfer({ amount: 1000, inflationAdjusted: true, isOneTime: true, startDate: "2024-01" });
     const scenario = makeScenario({ accounts: [acc], transfers: [t], inflationRate: 0.02, inflationEnabled: true });
     const result = runSimulation(scenario);
-    // i=0: 1.02^0 = 1 → nominal = 1000, deflated balance = 99000
+    // i=0: 1.02^0 = 1 → nominal withdrawal = 1000 → balance = 99000
     expect(result.balances["acc1"][0]).toBeCloseTo(99000);
   });
 
   it("inflation-adjusted at i=12: nominal withdrawal = amount * 1.02^1", () => {
-    // nominal = 1000 * 1.02 = 1020; deflated balance = (100000-1020)/1.02 = 98980/1.02
+    // nominal withdrawal = 1000 * 1.02 = 1020 → balance = 100000 - 1020 = 98980
     const acc = makeAccount({ id: "acc1", initialBalance: 100000 });
     const t = makeTransfer({ amount: 1000, inflationAdjusted: true, isOneTime: true, startDate: "2025-01" });
     const scenario = makeScenario({ accounts: [acc], transfers: [t], timelineStart: "2024-01", timelineEnd: "2025-02", inflationRate: 0.02, inflationEnabled: true });
     const result = runSimulation(scenario);
-    expect(result.balances["acc1"][12]).toBeCloseTo(98980 / 1.02, 1);
+    expect(result.balances["acc1"][12]).toBeCloseTo(98980, 1);
   });
 
   it("inflation-adjusted at i=6: nominal withdrawal = amount * 1.02^0.5", () => {
@@ -781,21 +772,20 @@ describe("Inflation: fixed transfer adjustment — with inflation", () => {
     const t = makeTransfer({ amount: 1000, inflationAdjusted: true, isOneTime: true, startDate: "2024-07" });
     const scenario = makeScenario({ accounts: [acc], transfers: [t], inflationRate: 0.02, inflationEnabled: true });
     const result = runSimulation(scenario);
-    const d6 = Math.pow(1.02, 6 / 12);
-    const nominal = 1000 * d6;
-    expect(result.balances["acc1"][6]).toBeCloseTo((100000 - nominal) / d6, 2);
+    const nominal = 1000 * Math.pow(1.02, 6 / 12);
+    expect(result.balances["acc1"][6]).toBeCloseTo(100000 - nominal, 2);
   });
 
   it("fixed-nominal at i=12: nominal withdrawal stays at entered amount", () => {
-    // nominal = 1000; deflated balance = 99000/1.02
+    // nominal withdrawal = 1000 → balance = 99000
     const acc = makeAccount({ id: "acc1", initialBalance: 100000 });
     const t = makeTransfer({ amount: 1000, inflationAdjusted: false, isOneTime: true, startDate: "2025-01" });
     const scenario = makeScenario({ accounts: [acc], transfers: [t], timelineStart: "2024-01", timelineEnd: "2025-02", inflationRate: 0.02, inflationEnabled: true });
     const result = runSimulation(scenario);
-    expect(result.balances["acc1"][12]).toBeCloseTo(99000 / 1.02, 1);
+    expect(result.balances["acc1"][12]).toBeCloseTo(99000, 1);
   });
 
-  it("inflation-adjusted produces lower displayed balance than fixed-nominal at month 12", () => {
+  it("inflation-adjusted withdraws more in nominal terms than fixed-nominal, leaving lower balance", () => {
     const mkScenario = (adjusted: boolean) => {
       const acc = makeAccount({ id: "acc1", initialBalance: 100000 });
       const t = makeTransfer({ amount: 1000, inflationAdjusted: adjusted, isOneTime: false, period: "monthly" });
@@ -803,11 +793,10 @@ describe("Inflation: fixed transfer adjustment — with inflation", () => {
     };
     const rAdjusted = runSimulation(mkScenario(true));
     const rFixed = runSimulation(mkScenario(false));
-    // Inflation-adjusted withdraws more in nominal terms → lower real balance
     expect(rAdjusted.balances["acc1"][12] as number).toBeLessThan(rFixed.balances["acc1"][12] as number);
   });
 
-  it("recurring inflation-adjusted: each month i uses its own deflator in the scaling formula", () => {
+  it("recurring inflation-adjusted: each month i withdraws amount * (1+r)^(i/12) in nominal terms", () => {
     const acc = makeAccount({ id: "acc1", initialBalance: 100000 });
     const t = makeTransfer({ amount: 1000, inflationAdjusted: true, isOneTime: false, period: "monthly" });
     const scenario = makeScenario({ accounts: [acc], transfers: [t], timelineEnd: "2024-06", inflationRate: 0.02, inflationEnabled: true });
@@ -815,20 +804,17 @@ describe("Inflation: fixed transfer adjustment — with inflation", () => {
     let nomBal = 100000;
     for (let i = 0; i < 6; i++) {
       nomBal -= 1000 * Math.pow(1.02, i / 12);
-      const expected = nomBal / Math.pow(1.02, i / 12);
-      expect(result.balances["acc1"][i]).toBeCloseTo(expected, 2);
+      expect(result.balances["acc1"][i]).toBeCloseTo(nomBal, 2);
     }
   });
 
-  it("recurring fixed-nominal: each month nominal = 1000, real = 1000/deflator", () => {
+  it("recurring fixed-nominal: each month withdraws exactly 1000 in nominal terms", () => {
     const acc = makeAccount({ id: "acc1", initialBalance: 100000 });
     const t = makeTransfer({ amount: 1000, inflationAdjusted: false, isOneTime: false, period: "monthly" });
     const scenario = makeScenario({ accounts: [acc], transfers: [t], timelineEnd: "2024-06", inflationRate: 0.02, inflationEnabled: true });
     const result = runSimulation(scenario);
     for (let i = 0; i < 6; i++) {
-      const nomBal = 100000 - (i + 1) * 1000;
-      const expected = nomBal / Math.pow(1.02, i / 12);
-      expect(result.balances["acc1"][i]).toBeCloseTo(expected, 2);
+      expect(result.balances["acc1"][i]).toBeCloseTo(100000 - (i + 1) * 1000, 2);
     }
   });
 
@@ -914,35 +900,32 @@ describe("Edge cases", () => {
 // ─── SECTION A: Inflation Semantics ──────────────────────────────────────────
 
 describe("A1: Inflation-adjusted invariant: real withdrawal = entered amount each month", () => {
-  it("reconstructed nominal withdrawal divided by deflator equals entered amount", () => {
+  it("nominal withdrawal divided by deflator equals entered amount", () => {
     const acc = makeAccount({ id: "acc1", initialBalance: 100000, growthRate: 0 });
     const t = makeTransfer({ amount: 1000, inflationAdjusted: true, isOneTime: false, period: "monthly" });
     const scenario = makeScenario({ accounts: [acc], transfers: [t], inflationRate: 0.03, inflationEnabled: true, timelineEnd: "2024-06" });
     const result = runSimulation(scenario);
     const r = 0.03;
-    // Recover nominal balances: nomBal[i] = display[i] * (1+r)^(i/12)
-    // Nominal withdrawal at month i = nomBal[i-1] - nomBal[i]
+    // Balances are nominal; withdrawal = balances[i-1] - balances[i]
     // Real withdrawal = nomWithdrawal / deflator[i] = should be exactly 1000
     for (let i = 1; i < 6; i++) {
-      const nomPrev = (result.balances["acc1"][i - 1] as number) * Math.pow(1 + r, (i - 1) / 12);
-      const nomCurr = (result.balances["acc1"][i] as number) * Math.pow(1 + r, i / 12);
-      const realWithdrawal = (nomPrev - nomCurr) / Math.pow(1 + r, i / 12);
+      const nomWithdrawal = (result.balances["acc1"][i - 1] as number) - (result.balances["acc1"][i] as number);
+      const realWithdrawal = nomWithdrawal / Math.pow(1 + r, i / 12);
       expect(realWithdrawal).toBeCloseTo(1000, 4);
     }
   });
 });
 
 describe("A2: Fixed-nominal invariant: nominal withdrawal constant, real spending power shrinks", () => {
-  it("reconstructed nominal withdrawal is constant at entered amount", () => {
+  it("nominal withdrawal is constant at entered amount", () => {
     const acc = makeAccount({ id: "acc1", initialBalance: 100000, growthRate: 0 });
     const t = makeTransfer({ amount: 1000, inflationAdjusted: false, isOneTime: false, period: "monthly" });
     const scenario = makeScenario({ accounts: [acc], transfers: [t], inflationRate: 0.03, inflationEnabled: true, timelineEnd: "2024-06" });
     const result = runSimulation(scenario);
-    const r = 0.03;
+    // Balances are nominal; withdrawal = balances[i-1] - balances[i] = 1000 exactly
     for (let i = 1; i < 6; i++) {
-      const nomPrev = (result.balances["acc1"][i - 1] as number) * Math.pow(1 + r, (i - 1) / 12);
-      const nomCurr = (result.balances["acc1"][i] as number) * Math.pow(1 + r, i / 12);
-      expect(nomPrev - nomCurr).toBeCloseTo(1000, 4);
+      const nomWithdrawal = (result.balances["acc1"][i - 1] as number) - (result.balances["acc1"][i] as number);
+      expect(nomWithdrawal).toBeCloseTo(1000, 4);
     }
   });
 
@@ -974,26 +957,23 @@ describe("A3: Inflation-adjusted vs fixed-nominal: display balances diverge afte
   });
 });
 
-describe("A4: Inflation + Growth: real return ≈ (1 + growthRate) / (1 + inflationRate) - 1", () => {
-  it("real balance ratio between two consecutive yearly growth events matches formula", () => {
+describe("A4: Inflation + Growth: nominal balances reflect compounded growth", () => {
+  it("growth fires at i=0 and i=12; balances are nominal; principals unchanged", () => {
     // Timeline 2024-01 to 2025-01: 13 months. Yearly growth fires at i=0 AND i=12.
     const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0.07 });
     const scenario = makeScenario({ accounts: [acc], timelineStart: "2024-01", timelineEnd: "2025-01", inflationRate: 0.02, inflationEnabled: true });
     const result = runSimulation(scenario);
-    // i=0: growth fires → nominal=10700, deflator=1 → display=10700
+    // i=0: growth fires → nominal = 10000 * 1.07 = 10700
     expect(result.balances["acc1"][0]).toBeCloseTo(10700, 2);
-    // i=12: growth fires again → nominal=10700*1.07=11449, deflated by 1.02 → 11224.5
-    expect(result.balances["acc1"][12]).toBeCloseTo(10700 * 1.07 / 1.02, 2);
-    // Real return per year = balances[12]/balances[0] - 1 = 1.07/1.02 - 1 ≈ 4.9%
-    const realReturn = (result.balances["acc1"][12] as number) / (result.balances["acc1"][0] as number) - 1;
-    expect(realReturn).toBeCloseTo(1.07 / 1.02 - 1, 3);
-    // Principals not deflated: stays at initial value
+    // i=12: growth fires again → nominal = 10700 * 1.07 = 11449
+    expect(result.balances["acc1"][12]).toBeCloseTo(10700 * 1.07, 2);
+    // Principal unchanged by growth
     expect(result.principals["acc1"][12]).toBeCloseTo(10000);
   });
 });
 
-describe("A5: Inflation + Growth + Non-Hedged Transfer: full interaction", () => {
-  it("displayed balance matches manual month-by-month computation", () => {
+describe("A5: Inflation + Growth + Inflation-Adjusted Transfer: full interaction", () => {
+  it("nominal balance matches manual month-by-month computation", () => {
     const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0.05, growthPeriod: "monthly" });
     const t = makeTransfer({ amount: 200, inflationAdjusted: true, isOneTime: false, period: "monthly" });
     const scenario = makeScenario({ accounts: [acc], transfers: [t], inflationRate: 0.02, inflationEnabled: true, timelineEnd: "2024-12" });
@@ -1004,14 +984,13 @@ describe("A5: Inflation + Growth + Non-Hedged Transfer: full interaction", () =>
     for (let i = 0; i < 12; i++) {
       // Growth uses snapshot, withdrawal also uses snapshot: both apply to opening balance
       nomBal = nomBal * (1 + growthRate) - 200 * Math.pow(1 + r, i / 12);
-      const expected = nomBal / Math.pow(1 + r, i / 12);
-      expect(result.balances["acc1"][i]).toBeCloseTo(expected, 1);
+      expect(result.balances["acc1"][i]).toBeCloseTo(nomBal, 1);
     }
   });
 });
 
-describe("A6: Gains-fraction tax uses nominal values, not real values", () => {
-  it("tax cost is identical with and without inflation; displays differ only by deflation", () => {
+describe("A6: Gains-fraction tax uses nominal values regardless of inflationEnabled", () => {
+  it("tax cost and resulting balance are identical with and without inflation (engine always works nominally)", () => {
     const mkSetup = (withInflation: boolean) => {
       const acc = makeAccount({ id: "acc1", initialBalance: 10000, initialPrincipalRatio: 0.5, growthRate: 0 });
       const t = makeTransfer({ amount: 1000, taxRate: 0.30, taxBasis: "gains-fraction", isOneTime: true, startDate: "2024-01" });
@@ -1023,31 +1002,30 @@ describe("A6: Gains-fraction tax uses nominal values, not real values", () => {
     };
     const rInfl = runSimulation(mkSetup(true));
     const rNone = runSimulation(mkSetup(false));
-    // At i=0 deflator=1: both show same displayed balance
-    expect(rInfl.balances["acc1"][0]).toBeCloseTo(rNone.balances["acc1"][0] as number, 4);
-    // At i=12: inflation version is deflated; no-inflation version is nominal
-    const nomAtMonth12 = rNone.balances["acc1"][12] as number;
-    expect(rInfl.balances["acc1"][12]).toBeCloseTo(nomAtMonth12 / 1.02, 2);
+    // Engine outputs nominal in both cases — results are identical
+    for (let i = 0; i < 13; i++) {
+      expect(rInfl.balances["acc1"][i]).toBeCloseTo(rNone.balances["acc1"][i] as number, 4);
+    }
   });
 });
 
-describe("A7: Inflation deflation with negative balance", () => {
-  it("negative nominal balance is deflated: debt worth less in real terms", () => {
+describe("A7: Negative balance with inflation enabled: engine returns nominal values", () => {
+  it("negative balance is returned nominally regardless of inflationEnabled", () => {
     const acc = makeAccount({ id: "acc1", initialBalance: 1000, growthRate: 0 });
     const t = makeTransfer({ amount: 1000, isOneTime: false, period: "monthly" });
     const scenario = makeScenario({ accounts: [acc], transfers: [t], inflationRate: 0.03, inflationEnabled: true, timelineEnd: "2024-03" });
     const result = runSimulation(scenario);
-    // i=0: 1000 - 1000 = 0 (deflator=1)
+    // i=0: 1000 - 1000 = 0
     expect(result.balances["acc1"][0]).toBeCloseTo(0);
-    // i=1: nominal = 0 - 1000 = -1000; real = -1000 / (1.03)^(1/12) ≈ -997.5 (less negative)
-    expect(result.balances["acc1"][1]).toBeCloseTo(-1000 / Math.pow(1.03, 1 / 12), 2);
-    // i=2: nominal = -1000 - 1000 = -2000; real = -2000 / (1.03)^(2/12)
-    expect(result.balances["acc1"][2]).toBeCloseTo(-2000 / Math.pow(1.03, 2 / 12), 2);
+    // i=1: 0 - 1000 = -1000 (nominal)
+    expect(result.balances["acc1"][1]).toBeCloseTo(-1000, 2);
+    // i=2: -1000 - 1000 = -2000 (nominal)
+    expect(result.balances["acc1"][2]).toBeCloseTo(-2000, 2);
   });
 });
 
-describe("A8: All accounts deflated independently by the same deflator", () => {
-  it("two accounts with different balances are each deflated correctly at i=12", () => {
+describe("A8: All accounts returned in nominal terms regardless of inflationEnabled", () => {
+  it("two accounts with different balances both return nominal values at i=12", () => {
     const acc1 = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0 });
     const acc2 = makeAccount({ id: "acc2", initialBalance: 5000, growthRate: 0 });
     const scenario = makeScenario({
@@ -1056,26 +1034,22 @@ describe("A8: All accounts deflated independently by the same deflator", () => {
       inflationRate: 0.04, inflationEnabled: true,
     });
     const result = runSimulation(scenario);
-    expect(result.balances["acc1"][12]).toBeCloseTo(10000 / 1.04, 2);
-    expect(result.balances["acc2"][12]).toBeCloseTo(5000 / 1.04, 2);
+    expect(result.balances["acc1"][12]).toBeCloseTo(10000, 2);
+    expect(result.balances["acc2"][12]).toBeCloseTo(5000, 2);
   });
 });
 
 describe("A1b: Percent-balance transfer operates on nominal balance; no inflation scaling applied", () => {
-  it("nominal balance drops by exactly transferRate each month regardless of inflation", () => {
-    // Percent-balance amount is computed on the nominal snapshot balance, then the result is
-    // deflated as a display transform. Consecutive displayed balances use *different* deflators,
-    // so display[i]/display[i-1] = 0.90 * (1+r)^(-1/12), not 0.90. The correct invariant is
-    // that the *nominal* ratio is exactly 0.90 — verified by recovering nominal values.
+  it("balance drops by exactly transferRate each month (balances are nominal)", () => {
     const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0 });
     const t = makeTransfer({ amount: 0.10, amountType: "percent-balance", isOneTime: false, period: "monthly" });
-    const r = 0.05;
-    const scenario = makeScenario({ accounts: [acc], transfers: [t], inflationRate: r, inflationEnabled: true, timelineEnd: "2024-12" });
+    const scenario = makeScenario({ accounts: [acc], transfers: [t], inflationRate: 0.05, inflationEnabled: true, timelineEnd: "2024-12" });
     const result = runSimulation(scenario);
+    // Balances are nominal; each month's balance = previous * 0.90
     for (let i = 1; i < 12; i++) {
-      const nomCurr = (result.balances["acc1"][i] as number) * Math.pow(1 + r, i / 12);
-      const nomPrev = (result.balances["acc1"][i - 1] as number) * Math.pow(1 + r, (i - 1) / 12);
-      expect(nomCurr / nomPrev).toBeCloseTo(0.90, 6);
+      const curr = result.balances["acc1"][i] as number;
+      const prev = result.balances["acc1"][i - 1] as number;
+      expect(curr / prev).toBeCloseTo(0.90, 6);
     }
   });
 });
@@ -1440,23 +1414,22 @@ describe("G4: Gains-only transfer with zero tax rate transfers all gains to targ
 });
 
 describe("G5: Very high inflation rate (50% annual)", () => {
-  it("balance at i=12 is deflated by 1.50", () => {
+  it("balance at i=12 is nominal (no deflation in engine)", () => {
     const acc = makeAccount({ id: "acc1", initialBalance: 10000, growthRate: 0 });
     const scenario = makeScenario({ accounts: [acc], timelineStart: "2024-01", timelineEnd: "2025-01", inflationRate: 0.50, inflationEnabled: true });
     const result = runSimulation(scenario);
-    expect(result.balances["acc1"][12]).toBeCloseTo(10000 / 1.50, 2);
+    expect(result.balances["acc1"][12]).toBeCloseTo(10000, 2);
   });
 
-  it("inflation-adjusted nominal withdrawal at i=6 scales by (1.5)^(6/12)", () => {
+  it("inflation-adjusted nominal withdrawal at i=6 scales by (1.5)^(6/12); real withdrawal = entered amount", () => {
     const acc = makeAccount({ id: "acc1", initialBalance: 100000, growthRate: 0 });
     const t = makeTransfer({ amount: 1000, inflationAdjusted: true, isOneTime: false, period: "monthly" });
     const scenario = makeScenario({ accounts: [acc], transfers: [t], inflationRate: 0.50, inflationEnabled: true, timelineEnd: "2024-07" });
     const result = runSimulation(scenario);
     const r = 0.50;
-    // Verify real withdrawal at i=6 = 1000
-    const nomPrev = (result.balances["acc1"][5] as number) * Math.pow(1 + r, 5 / 12);
-    const nomCurr = (result.balances["acc1"][6] as number) * Math.pow(1 + r, 6 / 12);
-    const realWithdrawal = (nomPrev - nomCurr) / Math.pow(1 + r, 6 / 12);
+    // Balances are nominal; withdrawal = balances[5] - balances[6]
+    const nomWithdrawal = (result.balances["acc1"][5] as number) - (result.balances["acc1"][6] as number);
+    const realWithdrawal = nomWithdrawal / Math.pow(1 + r, 6 / 12);
     expect(realWithdrawal).toBeCloseTo(1000, 2);
   });
 });

@@ -51,13 +51,18 @@ export function Chart({ result, accounts, scenario, visibleAccounts, viewportSta
     const months = result.months.slice(viewportStart, viewportEnd + 1);
     const visibleAccList = accounts.filter(a => visibleAccounts.has(a.id));
 
+    const deflate = (nominal: number | null | undefined, absIdx: number): number => {
+      if (nominal === null || nominal === undefined) return 0;
+      if (!scenario.inflationEnabled || scenario.inflationRate === 0) return nominal;
+      return nominal / Math.pow(1 + scenario.inflationRate, absIdx / 12);
+    };
+
     // Build data array: one entry per month
     const data = months.map((m, i) => {
       const idx = viewportStart + i;
       const entry: Record<string, number | string> = { month: m };
       for (const acc of visibleAccList) {
-        const val = result.balances[acc.id]?.[idx];
-        entry[acc.id] = val ?? 0;
+        entry[acc.id] = deflate(result.balances[acc.id]?.[idx], idx);
       }
       return entry;
     });
@@ -294,7 +299,7 @@ export function Chart({ result, accounts, scenario, visibleAccounts, viewportSta
       let total = 0;
       let html = `<div class="font-semibold mb-1">${month}</div>`;
       for (const acc of visibleAccList) {
-        const v = result.balances[acc.id]?.[monthIdx];
+        const v = deflate(result.balances[acc.id]?.[monthIdx], monthIdx);
         if (v !== null && v !== undefined) {
           total += v;
           html += `<div class="flex items-center gap-1">

@@ -164,18 +164,6 @@ export function runSimulation(scenario: Scenario): SimulationResult {
     }
   }
 
-  // Inflation adjustment (post-simulation, display transform only)
-  if (scenario.inflationEnabled && scenario.inflationRate !== 0) {
-    for (const acc of accounts) {
-      for (let i = 0; i < totalMonths; i++) {
-        if (balances[acc.id][i] !== null) {
-          const deflator = Math.pow(1 + scenario.inflationRate, i / 12);
-          balances[acc.id][i] = (balances[acc.id][i] as number) / deflator;
-        }
-      }
-    }
-  }
-
   return { months, balances, principals };
 }
 

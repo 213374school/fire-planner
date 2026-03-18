@@ -184,7 +184,7 @@ export function TransferEditor({ transfer, accounts }: Props) {
         <Field label={
           transfer.amountType === "percent-balance"
             ? `Amount — ${(transfer.amount * 100).toFixed(1)}% of balance`
-            : (transfer.amountType === "fixed" && (transfer.inflationHedged ?? true) === false)
+            : (transfer.amountType === "fixed" && (transfer.inflationAdjusted ?? false) === true)
               ? "Amount (today's value)"
               : "Amount"
         }>
