@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useScenarioStore } from "../store/scenario";
 import { validateScenario } from "../utils/validation";
+import { MonthPicker } from "./MonthPicker";
 import type { Scenario } from "../types";
 
 interface Props {
@@ -120,10 +121,10 @@ export function Settings({ onClose }: Props) {
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Timeline Start">
-            <input type="month" value={scenario.timelineStart} onChange={e => updateScenario({ timelineStart: e.target.value })} className="input" />
+            <MonthPicker value={scenario.timelineStart} onChange={v => updateScenario({ timelineStart: v })} />
           </Field>
           <Field label="Timeline End">
-            <input type="month" value={scenario.timelineEnd} onChange={e => updateScenario({ timelineEnd: e.target.value })} className="input" />
+            <MonthPicker value={scenario.timelineEnd} onChange={v => updateScenario({ timelineEnd: v })} />
           </Field>
         </div>
 

@@ -3,6 +3,7 @@ import type { Transfer, Account } from "../types";
 import { useScenarioStore } from "../store/scenario";
 import { CurrencyInput } from "./CurrencyInput";
 import { stepUp, stepDown } from "../utils/stepping";
+import { MonthPicker } from "./MonthPicker";
 
 const PERIODS = ["monthly", "quarterly", "half-yearly", "yearly"] as const;
 const PERIOD_LABELS: Record<typeof PERIODS[number], string> = {
@@ -126,12 +127,9 @@ export function TransferEditor({ transfer, accounts }: Props) {
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <input
-              type="month"
-              value={transfer.startDate}
-              onChange={e => update("startDate", e.target.value || null)}
-              className="input flex-1"
-            />
+            <div className="flex-1">
+              <MonthPicker value={transfer.startDate!} onChange={v => update("startDate", v)} />
+            </div>
             <button onClick={() => update("startDate", null)} className="text-xs text-zinc-400 dark:text-zinc-500 hover:underline whitespace-nowrap">Clear</button>
           </div>
         )}
@@ -155,12 +153,9 @@ export function TransferEditor({ transfer, accounts }: Props) {
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <input
-                  type="month"
-                  value={transfer.endDate}
-                  onChange={e => update("endDate", e.target.value || null)}
-                  className="input flex-1"
-                />
+                <div className="flex-1">
+                  <MonthPicker value={transfer.endDate!} onChange={v => update("endDate", v)} />
+                </div>
                 <button onClick={() => update("endDate", null)} className="text-xs text-zinc-400 dark:text-zinc-500 hover:underline whitespace-nowrap">Clear</button>
               </div>
             )}
