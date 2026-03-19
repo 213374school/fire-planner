@@ -494,7 +494,7 @@ export default function App() {
                           : "var(--anchor-label)",
                       }}
                     >
-                      {monthToLabel(anchor.date)}
+                      {monthToLabel(addMonths(anchor.date, 1))}
                     </div>
                   );
                 })}
