@@ -15,6 +15,24 @@ function CloseIcon() {
   );
 }
 
+// Normalize YYYY-M dates (single-digit month) to YYYY-MM, in-place.
+function padDate(s: unknown): unknown {
+  if (typeof s !== "string") return s;
+  return s.replace(/^(\d{4})-(\d)$/, (_, y, m) => `${y}-0${m}`);
+}
+function padDates(data: Record<string, unknown>) {
+  for (const key of ["timelineStart", "timelineEnd", "createdAt", "updatedAt"]) {
+    data[key] = padDate(data[key]);
+  }
+  for (const t of (data.transfers ?? []) as Record<string, unknown>[]) {
+    t.startDate = padDate(t.startDate);
+    t.endDate = padDate(t.endDate);
+  }
+  for (const a of (data.anchors ?? []) as Record<string, unknown>[]) {
+    a.date = padDate(a.date);
+  }
+}
+
 export function Settings({ onClose }: Props) {
   const { activeScenarioId, scenarios, updateScenario, createScenario, duplicateScenario, deleteScenario, setActiveScenario, importScenario } = useScenarioStore();
   const scenario = activeScenarioId ? scenarios[activeScenarioId] : null;
@@ -42,6 +60,7 @@ export function Settings({ onClose }: Props) {
     reader.onload = (ev) => {
       try {
         const data = JSON.parse(ev.target?.result as string);
+        padDates(data);
         const result = validateScenario(data);
         if (!result.valid) {
           setImportError(result.error ?? "Invalid file");
