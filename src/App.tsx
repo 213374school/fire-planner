@@ -219,8 +219,10 @@ export default function App() {
         zoomWidthRef.current = Math.max(12, Math.min(total - 1, zoomWidthRef.current));
         const newWidth = Math.round(zoomWidthRef.current);
         if (newWidth !== viewWidth) {
-          const centre = (start + end) / 2;
-          const newStart = Math.round(centre - newWidth / 2);
+          const rect = el.getBoundingClientRect();
+          const mouseRatio = Math.max(0, Math.min(1, (e.clientX - rect.left) / containerWidth));
+          const mouseMonth = start + mouseRatio * viewWidth;
+          const newStart = Math.round(mouseMonth - mouseRatio * newWidth);
           applyViewport(newStart, newStart + newWidth);
         }
       } else {
@@ -269,8 +271,11 @@ export default function App() {
         const newDist = Math.hypot(dx, dy);
         const factor = touchRef.current.dist / newDist;
         const newWidth = Math.max(12, Math.min(total - 1, Math.round(viewWidth * factor)));
-        const centre = (start + end) / 2;
-        const newStart = Math.round(centre - newWidth / 2);
+        const rect = el.getBoundingClientRect();
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const midRatio = Math.max(0, Math.min(1, (midX - rect.left) / containerWidth));
+        const midMonth = start + midRatio * viewWidth;
+        const newStart = Math.round(midMonth - midRatio * newWidth);
         applyViewport(newStart, newStart + newWidth);
         touchRef.current.dist = newDist;
       }
