@@ -137,6 +137,7 @@ export default function App() {
   const zoomWidthRef = useRef<number | null>(null);
   const zoomStartRef = useRef<number | null>(null);
   const activePointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const rafRef = useRef<number | null>(null);
 
   const scenario = activeScenarioId ? scenarios[activeScenarioId] : null;
 
@@ -197,8 +198,15 @@ export default function App() {
     const e = Math.min(total - 1, s + width);
     vpRef.current.start = s;
     vpRef.current.end = e;
-    setViewportStart(s);
-    setViewportEnd(e);
+    // Throttle React re-renders (and the d3 chart redraw they trigger) to one
+    // per animation frame, so rapid gesture events don't cause jank.
+    if (rafRef.current === null) {
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        setViewportStart(vpRef.current.start);
+        setViewportEnd(vpRef.current.end);
+      });
+    }
   }, []);
 
   useEffect(() => {

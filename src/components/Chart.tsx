@@ -33,6 +33,11 @@ export function Chart({ result, accounts, scenario, visibleAccounts, viewportSta
     step: number;
     absIdxToX: Map<number, number> | null;
   } | null>(null);
+  const mouseHandlerRef = useRef<{
+    onMove: (x: number, y: number) => void;
+    onLeave: () => void;
+    onClick: (x: number, y: number) => void;
+  } | null>(null);
 
   const visibleMonths = useMemo(
     () => result.months.slice(viewportStart, viewportEnd + 1),
@@ -388,84 +393,83 @@ export function Chart({ result, accounts, scenario, visibleAccounts, viewportSta
       return closest;
     };
 
-    // Tooltip overlay
-    const overlay = g.append("rect")
-      .attr("width", width)
-      .attr("height", height)
-      .attr("fill", "none")
-      .attr("pointer-events", "all");
-
     const tooltip = d3.select(tooltipRef.current);
 
-    overlay.on("mousemove", (event: MouseEvent) => {
-      const [mx] = d3.pointer(event);
-      const barIdx = findBarIdx(mx);
-      const datum = barData[barIdx];
-      const absIdx = datum._absIdx;
-
-      onHoverIdx(absIdx);
-
-      let total = 0;
-      let html = `<div class="font-semibold mb-1">${datum.month as string}</div>`;
-      for (const acc of visibleAccList) {
-        const v = datum[acc.id] as number;
-        total += v || 0;
-        html += `<div class="flex items-center gap-1">
-          <span style="background:${colorMap[acc.id]}" class="inline-block w-2 h-2 rounded-full"></span>
-          <span>${acc.name}:</span>
-          <span class="font-medium">${formatCurrency(v, scenario.currencyLocale, scenario.currencySymbol)}</span>
-        </div>`;
-      }
-      html += `<div class="border-t mt-1 pt-1 font-semibold">Net: ${formatCurrency(total, scenario.currencyLocale, scenario.currencySymbol)}</div>`;
-
-      const cursorX = mx + margin.left;
-      tooltip.style("display", "block").html(html);
-      const tW = tooltipRef.current?.offsetWidth ?? 200;
-      tooltip
-        .style("left", `${Math.min(cursorX + 10, totalWidth - tW - 4)}px`)
-        .style("right", "auto")
-        .style("top", `${event.offsetY}px`);
-    });
-
-    overlay.on("mouseleave", () => {
-      onHoverIdx(null);
-      tooltip.style("display", "none");
-    });
-
-    overlay.on("click", (event: MouseEvent) => {
-      if (!onSelectItem) return;
-      const [mx, my] = d3.pointer(event);
-      const barIdx = findBarIdx(mx);
-
-      for (let li = posLayers.length - 1; li >= 0; li--) {
-        const layer = posLayers[li];
-        const point = layer[barIdx];
-        if (!point) continue;
-        const yTop = yScale(point[1]);
-        const yBot = yScale(point[0]);
-        if (my >= yTop && my <= yBot && point[1] !== point[0]) {
-          const newId = layer.key === selectedItemId ? null : layer.key;
-          onSelectItem(newId, newId ? "account" : null);
+    // Mouse interaction is handled on the stable React wrapper div (not inside
+    // the SVG) so that gestures aren't broken when d3 redraws the SVG children.
+    // x/y are relative to the wrapper div's top-left corner.
+    mouseHandlerRef.current = {
+      onMove: (x, y) => {
+        const mx = x - margin.left;
+        const my = y - margin.top;
+        if (mx < 0 || mx > width || my < 0 || my > height) {
+          onHoverIdx(null);
+          tooltip.style("display", "none");
           return;
         }
-      }
+        const barIdx = findBarIdx(mx);
+        const datum = barData[barIdx];
+        onHoverIdx(datum._absIdx);
 
-      for (let li = negLayers.length - 1; li >= 0; li--) {
-        const layer = negLayers[li];
-        const point = layer[barIdx];
-        if (!point) continue;
-        // For negative layers: y0 > y1 in value space, so yScale(y0) < yScale(y1) in screen space
-        const yTop = yScale(point[0]);
-        const yBot = yScale(point[1]);
-        if (my >= yTop && my <= yBot && point[1] !== point[0]) {
-          const newId = layer.key === selectedItemId ? null : layer.key;
-          onSelectItem(newId, newId ? "account" : null);
-          return;
+        let total = 0;
+        let html = `<div class="font-semibold mb-1">${datum.month as string}</div>`;
+        for (const acc of visibleAccList) {
+          const v = datum[acc.id] as number;
+          total += v || 0;
+          html += `<div class="flex items-center gap-1">
+            <span style="background:${colorMap[acc.id]}" class="inline-block w-2 h-2 rounded-full"></span>
+            <span>${acc.name}:</span>
+            <span class="font-medium">${formatCurrency(v, scenario.currencyLocale, scenario.currencySymbol)}</span>
+          </div>`;
         }
-      }
+        html += `<div class="border-t mt-1 pt-1 font-semibold">Net: ${formatCurrency(total, scenario.currencyLocale, scenario.currencySymbol)}</div>`;
 
-      onSelectItem(null, null);
-    });
+        tooltip.style("display", "block").html(html);
+        const tW = tooltipRef.current?.offsetWidth ?? 200;
+        tooltip
+          .style("left", `${Math.min(x + 10, totalWidth - tW - 4)}px`)
+          .style("right", "auto")
+          .style("top", `${y}px`);
+      },
+      onLeave: () => {
+        onHoverIdx(null);
+        tooltip.style("display", "none");
+      },
+      onClick: (x, y) => {
+        if (!onSelectItem) return;
+        const mx = x - margin.left;
+        const my = y - margin.top;
+        const barIdx = findBarIdx(mx);
+
+        for (let li = posLayers.length - 1; li >= 0; li--) {
+          const layer = posLayers[li];
+          const point = layer[barIdx];
+          if (!point) continue;
+          const yTop = yScale(point[1]);
+          const yBot = yScale(point[0]);
+          if (my >= yTop && my <= yBot && point[1] !== point[0]) {
+            const newId = layer.key === selectedItemId ? null : layer.key;
+            onSelectItem(newId, newId ? "account" : null);
+            return;
+          }
+        }
+
+        for (let li = negLayers.length - 1; li >= 0; li--) {
+          const layer = negLayers[li];
+          const point = layer[barIdx];
+          if (!point) continue;
+          const yTop = yScale(point[0]);
+          const yBot = yScale(point[1]);
+          if (my >= yTop && my <= yBot && point[1] !== point[0]) {
+            const newId = layer.key === selectedItemId ? null : layer.key;
+            onSelectItem(newId, newId ? "account" : null);
+            return;
+          }
+        }
+
+        onSelectItem(null, null);
+      },
+    };
 
   }, [result, accounts, visibleAccounts, viewportStart, viewportEnd, scenario, onHoverIdx, selectedItemId, onSelectItem, showRealValues]);
 
@@ -480,8 +484,19 @@ export function Chart({ result, accounts, scenario, visibleAccounts, viewportSta
   })();
 
   return (
-    <div className="relative w-full h-full">
-      <svg ref={svgRef} className="w-full h-full" />
+    <div
+      className="relative w-full h-full"
+      onMouseMove={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        mouseHandlerRef.current?.onMove(e.clientX - rect.left, e.clientY - rect.top);
+      }}
+      onMouseLeave={() => mouseHandlerRef.current?.onLeave()}
+      onClick={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        mouseHandlerRef.current?.onClick(e.clientX - rect.left, e.clientY - rect.top);
+      }}
+    >
+      <svg ref={svgRef} className="w-full h-full" style={{ pointerEvents: "none" }} />
       {crosshairX !== null && (
         <svg className="absolute inset-0 w-full h-full pointer-events-none">
           <line
