@@ -120,7 +120,7 @@ export function Timeline({ scenario, selectedItemId, viewportStart, viewportEnd,
     lanes.reduce((m, l) => Math.max(m, l.lane), 0),
     createRows.reduce((m, r) => Math.max(m, r.lane), 0),
   );
-  const laneHeight = 24;
+  const laneHeight = 30;
   const h = laneHeight - 4;         // bar height = 20px
   const arrowTip = h / 2;           // = 10px — width of the chevron point
   const minCompactWidth = (h + arrowTip * 2 + 8) / 2; // enough to show both color halves clearly
