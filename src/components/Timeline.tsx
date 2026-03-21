@@ -935,11 +935,20 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
                   )}
                 </>
               )}
-              {!isOneTime && widthPct > 5 && (
-                <span className={`text-xs truncate px-1 pointer-events-none ${!isTransfer ? "font-bold" : ""}`} style={{ position: "relative", zIndex: 1, color: srcIsNone ? "var(--none-label)" : "white" }}>{nameMap[id]}</span>
+              {!isTransfer && !isOneTime && widthPct > 5 && (
+                <span className="text-xs truncate px-1 pointer-events-none font-bold" style={{ position: "relative", zIndex: 1, color: srcIsNone ? "var(--none-label)" : "white" }}>{nameMap[id]}</span>
               )}
-              {isTransfer && !isOneTime && widthPct > 5 && tgtName && (
-                <span className="absolute right-1 text-xs text-white pointer-events-none" style={{ zIndex: 1 }}>{tgtName}</span>
+              {isTransfer && !isOneTime && widthPct > 5 && (
+                <>
+                  <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, right: `calc(50% + ${(arrowTip + 2) / 2}px)`, overflow: "hidden", display: "flex", alignItems: "center", zIndex: 1, pointerEvents: "none" }}>
+                    <span className="text-xs truncate px-1" style={{ color: srcIsNone ? "var(--none-label)" : "white" }}>{nameMap[id]}</span>
+                  </div>
+                  {tgtName && (
+                    <div style={{ position: "absolute", left: `calc(50% + ${(arrowTip + 2) / 2}px)`, top: 0, bottom: 0, right: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "flex-end", zIndex: 1, pointerEvents: "none" }}>
+                      <span className="text-xs truncate px-1 text-white">{tgtName}</span>
+                    </div>
+                  )}
+                </>
               )}
               {/* Handles — transfers only */}
               {isTransfer && !isOneTime && (
