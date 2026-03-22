@@ -611,7 +611,7 @@ export default function App() {
           {/* Timeline */}
           <div
             ref={timelineRef}
-            className="bg-white dark:bg-zinc-900 py-2"
+            className="flex-1 bg-white dark:bg-zinc-900 py-2"
             style={{ minHeight: 80, overflowY: "auto", paddingLeft: CHART_MARGIN.left + 8, paddingRight: CHART_MARGIN.right + 8 }}
           >
             <Timeline

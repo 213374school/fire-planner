@@ -783,7 +783,7 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
   })();
 
   return (
-    <div ref={containerRef} className="relative w-full select-none">
+    <div ref={containerRef} className="relative w-full h-full select-none">
       {/* Highlight styles */}
       <style>{`
         .anchor-candidate-highlight {
@@ -794,7 +794,7 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
       {/* Bars */}
       <div
         className="relative"
-        style={{ height: barsHeight, transition: "height 150ms ease" }}
+        style={{ minHeight: barsHeight, height: "100%", transition: "min-height 150ms ease" }}
         onClick={() => onSelectItem(null, null)}
         onMouseMove={e => {
           if (isDraggingAnchorRef.current) return;
