@@ -37,6 +37,19 @@ type DragTarget =
   | { type: "anchor"; anchor: TimeAnchor }
   | { type: "edge"; itemId: string; edge: EdgeId; existingAnchorId: string | null };
 
+function RowDragHandle() {
+  return (
+    <svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor">
+      <circle cx="3" cy="2" r="1.2" />
+      <circle cx="7" cy="2" r="1.2" />
+      <circle cx="3" cy="6" r="1.2" />
+      <circle cx="7" cy="6" r="1.2" />
+      <circle cx="3" cy="10" r="1.2" />
+      <circle cx="7" cy="10" r="1.2" />
+    </svg>
+  );
+}
+
 export function Timeline({ scenario, selectedItemId, selectedItemType, viewportStart, viewportEnd, onSelectItem, hoveredIdx, onHoverIdx, hoveredAnchorId, onHoverAnchorId }: TimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const isDraggingAnchorRef = useRef(false);
@@ -45,6 +58,17 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
   const updateAnchor = useScenarioStore(s => s.updateAnchor);
   const addTransferAt = useScenarioStore(s => s.addTransferAt);
   const captureHistorySnapshot = useScenarioStore(s => s.captureHistorySnapshot);
+
+  const reorderAccount = useScenarioStore(s => s.reorderAccount);
+  const reorderTransferInGroup = useScenarioStore(s => s.reorderTransferInGroup);
+
+  const [rowDragState, setRowDragState] = useState<{
+    kind: "account" | "transfer";
+    sourceAccountId: string | null;
+    fromIdx: number;
+    insertAtGap: number;
+  } | null>(null);
+  const [hoveredHandle, setHoveredHandle] = useState<string | null>(null);
 
   const [createDragPreview, setCreateDragPreview] = useState<{
     sourceAccountId: string | null;
@@ -667,10 +691,76 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
     window.addEventListener("mouseup", onMouseUp);
   }, [viewMonths, viewportStart, scenario.timelineStart, anchors, addTransferAt]);
 
+  const handleRowDrag = useCallback((
+    e: React.MouseEvent,
+    kind: "account" | "transfer",
+    sourceAccountId: string | null,
+    fromIdx: number,
+    boundaries: number[], // top Y of each item in the group (px from container top), in visual order
+    onCommit: (insertAtGap: number) => void,
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    captureHistorySnapshot();
+    const container = containerRef.current;
+    if (!container) return;
+
+    let currentGap = fromIdx + 1; // default: same position (no-op)
+    setRowDragState({ kind, sourceAccountId, fromIdx, insertAtGap: currentGap });
+
+    const onMouseMove = (ev: MouseEvent) => {
+      const rect = container.getBoundingClientRect();
+      const relY = ev.clientY - rect.top;
+      let gap = 0;
+      for (let i = 0; i < boundaries.length; i++) {
+        if (relY > boundaries[i] + 15) gap = i + 1; // 15 = laneHeight/2
+      }
+      currentGap = gap;
+      setRowDragState(prev => prev ? { ...prev, insertAtGap: gap } : null);
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      setRowDragState(null);
+      setHoveredHandle(null);
+      if (currentGap !== fromIdx && currentGap !== fromIdx + 1) {
+        onCommit(currentGap);
+      }
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  }, [captureHistorySnapshot]);
+
   const nameMap = Object.fromEntries([
     ...scenario.accounts.map(a => [a.id, a.name]),
     ...scenario.transfers.map(t => [t.id, t.name]),
   ]);
+
+  // Precomputed data for row reorder drag
+  const externalTransfersOrdered = scenario.transfers.filter(t => t.sourceAccountId === null);
+  const accountTransfersOrdered: Record<string, import("../types").Transfer[]> = {};
+  for (const acc of scenario.accounts) {
+    accountTransfersOrdered[acc.id] = scenario.transfers.filter(t => t.sourceAccountId === acc.id);
+  }
+  const transferLaneY: Record<string, number> = {};
+  for (const l of lanes) {
+    if (l.type === "transfer") transferLaneY[l.id] = laneTopPx(l.lane);
+  }
+  const accountLaneTops = scenario.accounts.map(acc => laneTopPx(accountLaneMap[acc.id]));
+
+  function sortByVisualY(group: import("../types").Transfer[]): import("../types").Transfer[] {
+    return [...group].sort((a, b) => {
+      const yDiff = (transferLaneY[a.id] ?? 0) - (transferLaneY[b.id] ?? 0);
+      return yDiff !== 0 ? yDiff : group.indexOf(a) - group.indexOf(b);
+    });
+  }
+  const sortedExternalGroup = sortByVisualY(externalTransfersOrdered);
+  const sortedTransferGroups: Record<string, import("../types").Transfer[]> = {};
+  for (const acc of scenario.accounts) {
+    sortedTransferGroups[acc.id] = sortByVisualY(accountTransfersOrdered[acc.id] ?? []);
+  }
 
   const todayPct = (() => {
     const now = new Date();
@@ -884,9 +974,15 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
               }}
               onClick={e => { e.stopPropagation(); onSelectItem(id, type); }}
               onMouseDown={dragStart !== null ? e => handleDrag(e, id, type, "body", dragStart, dragEnd) : undefined}
-              onMouseEnter={isTransfer ? e => setHoveredTransfer({ id, x: e.clientX, y: e.clientY }) : undefined}
+              onMouseEnter={e => {
+                if (isTransfer) setHoveredTransfer({ id, x: e.clientX, y: e.clientY });
+                setHoveredHandle(type === "account" ? `acc-${id}` : `tx-${id}`);
+              }}
               onMouseMove={isTransfer ? e => setHoveredTransfer(h => h ? { ...h, x: e.clientX, y: e.clientY } : h) : undefined}
-              onMouseLeave={isTransfer ? () => setHoveredTransfer(null) : undefined}
+              onMouseLeave={() => {
+                if (isTransfer) setHoveredTransfer(null);
+                if (!rowDragState) setHoveredHandle(null);
+              }}
             >
               {!isTransfer && (
                 <div style={{ position: "absolute", inset: 0, background: srcColor, pointerEvents: "none" }} />
@@ -972,6 +1068,115 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
             </div>
           );
         })}
+
+        {/* Row reorder drag handles — left gutter */}
+        {externalTransfersOrdered.map((t, idx) => {
+          const y = transferLaneY[t.id];
+          if (y === undefined) return null;
+          const handleKey = `tx-${t.id}`;
+          const tgtColor = scenario.accounts.find(a => a.id === t.targetAccountId)?.color ?? "#9ca3af";
+          return (
+            <div
+              key={handleKey}
+              className="absolute flex items-center justify-center"
+              style={{
+                left: -18, top: y, width: 18, height: laneHeight, zIndex: 10,
+                cursor: rowDragState ? "grabbing" : "grab",
+                color: tgtColor,
+                opacity: hoveredHandle === handleKey ? 1 : 0,
+                transition: "opacity 0.15s",
+              }}
+              onMouseEnter={() => setHoveredHandle(handleKey)}
+              onMouseLeave={() => { if (!rowDragState) setHoveredHandle(null); }}
+              onMouseDown={e => {
+                const fromVisualIdx = sortedExternalGroup.findIndex(tx => tx.id === t.id);
+                handleRowDrag(e, "transfer", null, fromVisualIdx, sortedExternalGroup.map(tx => transferLaneY[tx.id] ?? 0),
+                  (gap) => reorderTransferInGroup(t.id, sortedExternalGroup[gap]?.id ?? null));
+              }}
+            >
+              <RowDragHandle />
+            </div>
+          );
+        })}
+        {scenario.accounts.flatMap((acc, accIdx) => {
+          const accY = accountLaneTops[accIdx];
+          const accHandleKey = `acc-${acc.id}`;
+          const accTransfers = accountTransfersOrdered[acc.id] ?? [];
+          const elements = [
+            <div
+              key={accHandleKey}
+              className="absolute flex items-center justify-center"
+              style={{
+                left: -18, top: accY, width: 18, height: laneHeight, zIndex: 10,
+                cursor: rowDragState ? "grabbing" : "grab",
+                color: acc.color,
+                opacity: hoveredHandle === accHandleKey ? 1 : 0,
+                transition: "opacity 0.15s",
+              }}
+              onMouseEnter={() => setHoveredHandle(accHandleKey)}
+              onMouseLeave={() => { if (!rowDragState) setHoveredHandle(null); }}
+              onMouseDown={e => handleRowDrag(e, "account", null, accIdx, accountLaneTops, (gap) => reorderAccount(accIdx, gap))}
+            >
+              <RowDragHandle />
+            </div>,
+            ...accTransfers.map((t, txIdx) => {
+              const y = transferLaneY[t.id];
+              if (y === undefined) return null;
+              const handleKey = `tx-${t.id}`;
+              return (
+                <div
+                  key={handleKey}
+                  className="absolute flex items-center justify-center"
+                  style={{
+                    left: -18, top: y, width: 18, height: laneHeight, zIndex: 10,
+                    cursor: rowDragState ? "grabbing" : "grab",
+                    color: acc.color,
+                    opacity: hoveredHandle === handleKey ? 1 : 0,
+                    transition: "opacity 0.15s",
+                  }}
+                  onMouseEnter={() => setHoveredHandle(handleKey)}
+                  onMouseLeave={() => { if (!rowDragState) setHoveredHandle(null); }}
+                  onMouseDown={e => {
+                    const sorted = sortedTransferGroups[acc.id] ?? [];
+                    const fromVisualIdx = sorted.findIndex(tx => tx.id === t.id);
+                    handleRowDrag(e, "transfer", acc.id, fromVisualIdx, sorted.map(tx => transferLaneY[tx.id] ?? 0),
+                      (gap) => reorderTransferInGroup(t.id, sorted[gap]?.id ?? null));
+                  }}
+                >
+                  <RowDragHandle />
+                </div>
+              );
+            }).filter(Boolean),
+          ];
+          return elements;
+        })}
+
+        {/* Drop indicator line during row reorder drag */}
+        {rowDragState !== null && (() => {
+          const { kind, sourceAccountId, fromIdx, insertAtGap } = rowDragState;
+          if (insertAtGap === fromIdx || insertAtGap === fromIdx + 1) return null;
+          let lineY: number;
+          if (kind === "account") {
+            lineY = insertAtGap < accountLaneTops.length
+              ? accountLaneTops[insertAtGap]
+              : (accountLaneTops[accountLaneTops.length - 1] ?? 0) + laneHeight;
+          } else {
+            const group = sourceAccountId === null
+              ? sortedExternalGroup
+              : (sortedTransferGroups[sourceAccountId] ?? []);
+            if (group.length === 0) return null;
+            lineY = insertAtGap < group.length
+              ? (transferLaneY[group[insertAtGap].id] ?? 0)
+              : (transferLaneY[group[group.length - 1].id] ?? 0) + laneHeight;
+          }
+          const color = kind === "account" ? (scenario.accounts[fromIdx]?.color ?? "#6b7280") : "#6b7280";
+          return (
+            <div
+              className="absolute pointer-events-none"
+              style={{ left: 0, right: 0, top: lineY, height: 2, background: color, zIndex: 20, borderRadius: 1, opacity: 0.85 }}
+            />
+          );
+        })()}
       </div>
 
       {/* Transfer hover tooltip */}

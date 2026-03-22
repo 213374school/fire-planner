@@ -53,6 +53,9 @@ interface ScenarioStore {
 
   rerunSimulation: () => void;
 
+  reorderAccount: (fromIndex: number, insertAtGap: number) => void;
+  reorderTransferInGroup: (draggedId: string, insertBeforeId: string | null) => void;
+
   addAnchor: (anchor: TimeAnchor) => void;
   updateAnchor: (anchor: TimeAnchor) => void;
   removeAnchor: (id: string) => void;
@@ -527,6 +530,40 @@ export const useScenarioStore = create<ScenarioStore>()(
         set(state => ({
           simulationResult: recompute(state.scenarios, state.activeScenarioId),
         }));
+      },
+
+      reorderAccount: (fromIndex, insertAtGap) => {
+        set(state => {
+          if (!state.activeScenarioId) return state;
+          const scenario = state.scenarios[state.activeScenarioId];
+          const accounts = [...scenario.accounts];
+          const [item] = accounts.splice(fromIndex, 1);
+          accounts.splice(fromIndex < insertAtGap ? insertAtGap - 1 : insertAtGap, 0, item);
+          const scenarios = { ...state.scenarios, [state.activeScenarioId]: { ...scenario, accounts, updatedAt: currentMonth() } };
+          return { ...withHistory(state), scenarios, simulationResult: recompute(scenarios, state.activeScenarioId) };
+        });
+      },
+
+      reorderTransferInGroup: (draggedId, insertBeforeId) => {
+        set(state => {
+          if (!state.activeScenarioId) return state;
+          const scenario = state.scenarios[state.activeScenarioId];
+          const dragged = scenario.transfers.find(t => t.id === draggedId);
+          if (!dragged) return state;
+          const sourceAccountId = dragged.sourceAccountId;
+          const group = scenario.transfers.filter(t => t.sourceAccountId === sourceAccountId);
+          const draggedIdx = group.findIndex(t => t.id === draggedId);
+          const insertBeforeIdx = insertBeforeId ? group.findIndex(t => t.id === insertBeforeId) : group.length;
+          const newGroup = [...group];
+          const [item] = newGroup.splice(draggedIdx, 1);
+          newGroup.splice(draggedIdx < insertBeforeIdx ? insertBeforeIdx - 1 : insertBeforeIdx, 0, item);
+          let groupIdx = 0;
+          const newTransfers = scenario.transfers.map(t =>
+            t.sourceAccountId === sourceAccountId ? newGroup[groupIdx++] : t
+          );
+          const scenarios = { ...state.scenarios, [state.activeScenarioId]: { ...scenario, transfers: newTransfers, updatedAt: currentMonth() } };
+          return { ...withHistory(state), scenarios, simulationResult: recompute(scenarios, state.activeScenarioId) };
+        });
       },
 
       addAnchor: (anchor) => {
