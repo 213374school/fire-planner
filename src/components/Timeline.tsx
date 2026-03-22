@@ -77,7 +77,9 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
     endDate: string;
   } | null>(null);
   const [hoveredTransfer, setHoveredTransfer] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [hoveredAccount, setHoveredAccount] = useState<{ id: string; x: number; y: number } | null>(null);
   const tooltipDivRef = useRef<HTMLDivElement | null>(null);
+  const accountTooltipDivRef = useRef<HTMLDivElement | null>(null);
   const [activeCreateRow, setActiveCreateRow] = useState<string | null>(null);
   const createRowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isCreatingRef = useRef(false);
@@ -976,11 +978,16 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
               onMouseDown={dragStart !== null ? e => handleDrag(e, id, type, "body", dragStart, dragEnd) : undefined}
               onMouseEnter={e => {
                 if (isTransfer) setHoveredTransfer({ id, x: e.clientX, y: e.clientY });
+                else setHoveredAccount({ id, x: e.clientX, y: e.clientY });
                 setHoveredHandle(type === "account" ? `acc-${id}` : `tx-${id}`);
               }}
-              onMouseMove={isTransfer ? e => setHoveredTransfer(h => h ? { ...h, x: e.clientX, y: e.clientY } : h) : undefined}
+              onMouseMove={e => {
+                if (isTransfer) setHoveredTransfer(h => h ? { ...h, x: e.clientX, y: e.clientY } : h);
+                else setHoveredAccount(h => h ? { ...h, x: e.clientX, y: e.clientY } : h);
+              }}
               onMouseLeave={() => {
                 if (isTransfer) setHoveredTransfer(null);
+                else setHoveredAccount(null);
                 if (!rowDragState) setHoveredHandle(null);
               }}
             >
@@ -1178,6 +1185,48 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
           );
         })()}
       </div>
+
+      {/* Account hover tooltip */}
+      {hoveredAccount && simulationResult && hoveredIdx !== null && (() => {
+        const acc = scenario.accounts.find(a => a.id === hoveredAccount.id);
+        if (!acc) return null;
+        const monthStr = simulationResult.months[hoveredIdx];
+        if (!monthStr) return null;
+        const balance = simulationResult.balances[acc.id]?.[hoveredIdx];
+        if (balance === null || balance === undefined) return null;
+
+        const r = scenario.inflationRate;
+        const inflationOn = scenario.inflationEnabled && r !== 0;
+        const sym = scenario.currencySymbol;
+        const loc = scenario.currencyLocale;
+        const deflator = inflationOn ? Math.pow(1 + r, hoveredIdx / 12) : 1;
+        const balanceReal = inflationOn ? balance / deflator : balance;
+
+        const { x, y } = hoveredAccount;
+        const tH = accountTooltipDivRef.current?.offsetHeight ?? 70;
+        return (
+          <div
+            ref={accountTooltipDivRef}
+            className="pointer-events-none fixed z-50 rounded-md px-2.5 py-1.5 text-xs shadow-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900"
+            style={{
+              left: Math.min(x + 14, window.innerWidth - 220),
+              top: Math.min(y - 10, window.innerHeight - tH - 4),
+              whiteSpace: "nowrap",
+            }}
+          >
+            <div className="font-medium mb-0.5">{acc.name}</div>
+            <div className="text-gray-500 dark:text-gray-500 text-[10px] mb-1">{monthToLabel(monthStr)}</div>
+            {inflationOn ? (
+              <>
+                <div>Nominal: {formatCurrency(balance, loc, sym)}</div>
+                <div>Real: {formatCurrency(balanceReal, loc, sym)}</div>
+              </>
+            ) : (
+              <div>{formatCurrency(balance, loc, sym)}</div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Transfer hover tooltip */}
       {hoveredTransfer && simulationResult && (() => {
