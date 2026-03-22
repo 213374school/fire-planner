@@ -20,6 +20,14 @@ import { monthToLabel, formatCurrency } from "../utils/formatting";
 import { generateId } from "../utils/defaults";
 import type { EdgeId } from "../types";
 
+export interface DragCreateInfo {
+  sourceAccountId: string | null;
+  startDate: string;
+  endDate: string | null;
+  startAnchorId: string | null;
+  endAnchorId: string | null;
+}
+
 interface TimelineProps {
   scenario: Scenario;
   selectedItemId: string | null;
@@ -27,6 +35,7 @@ interface TimelineProps {
   viewportStart: number;
   viewportEnd: number;
   onSelectItem: (id: string | null, type: "account" | "transfer" | null) => void;
+  onDragCreate: (info: DragCreateInfo) => void;
   hoveredIdx: number | null;
   onHoverIdx: (idx: number | null) => void;
   hoveredAnchorId: string | null;
@@ -50,7 +59,7 @@ function RowDragHandle() {
   );
 }
 
-export function Timeline({ scenario, selectedItemId, selectedItemType, viewportStart, viewportEnd, onSelectItem, hoveredIdx, onHoverIdx, hoveredAnchorId, onHoverAnchorId }: TimelineProps) {
+export function Timeline({ scenario, selectedItemId, selectedItemType, viewportStart, viewportEnd, onSelectItem, onDragCreate, hoveredIdx, onHoverIdx, hoveredAnchorId, onHoverAnchorId }: TimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const isDraggingAnchorRef = useRef(false);
   const applyDragUpdate = useScenarioStore(s => s.applyDragUpdate);
@@ -680,18 +689,18 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
       const finalStartAnchorId = swapped ? snapEndAnchorId : snapStartAnchorId;
       const finalEndAnchorId = swapped ? snapStartAnchorId : snapEndAnchorId;
 
-      addTransferAt(
+      onDragCreate({
         sourceAccountId,
-        previewStart,
-        previewEnd === previewStart ? null : previewEnd,
-        finalStartAnchorId,
-        previewEnd === previewStart ? null : finalEndAnchorId,
-      );
+        startDate: previewStart,
+        endDate: previewEnd === previewStart ? null : previewEnd,
+        startAnchorId: finalStartAnchorId,
+        endAnchorId: previewEnd === previewStart ? null : finalEndAnchorId,
+      });
     };
 
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
-  }, [viewMonths, viewportStart, scenario.timelineStart, anchors, addTransferAt]);
+  }, [viewMonths, viewportStart, scenario.timelineStart, anchors, onDragCreate]);
 
   const handleRowDrag = useCallback((
     e: React.MouseEvent,
@@ -1337,6 +1346,7 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
           </div>
         );
       })()}
+
     </div>
   );
 }

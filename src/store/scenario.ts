@@ -43,7 +43,7 @@ interface ScenarioStore {
   deleteAccount: (id: string) => void;
 
   addTransfer: (sourceId: string | null, targetId: string | null) => void;
-  addTransferAt: (sourceId: string | null, startDate: string, endDate: string | null, snapStartAnchorId?: string | null, snapEndAnchorId?: string | null) => void;
+  addTransferAt: (sourceId: string | null, startDate: string, endDate: string | null, snapStartAnchorId?: string | null, snapEndAnchorId?: string | null, targetId?: string | null) => void;
   updateTransfer: (id: string, updates: Partial<Transfer>) => void;
   deleteTransfer: (id: string) => void;
 
@@ -414,7 +414,7 @@ export const useScenarioStore = create<ScenarioStore>()(
         });
       },
 
-      addTransferAt: (sourceId, startDate, endDate, snapStartAnchorId, snapEndAnchorId) => {
+      addTransferAt: (sourceId, startDate, endDate, snapStartAnchorId, snapEndAnchorId, targetId) => {
         set(state => {
           if (!state.activeScenarioId) return state;
           const scenario = state.scenarios[state.activeScenarioId];
@@ -422,7 +422,7 @@ export const useScenarioStore = create<ScenarioStore>()(
             id: generateId(),
             name: "New Transfer",
             sourceAccountId: sourceId,
-            targetAccountId: null,
+            targetAccountId: targetId ?? null,
             startDate,
             endDate,
             isOneTime: false,

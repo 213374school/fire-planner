@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useScenarioStore } from "./store/scenario";
 import { Chart, CHART_MARGIN } from "./components/Chart";
 import { Timeline } from "./components/Timeline";
+import type { DragCreateInfo } from "./components/Timeline";
 import { EditorPanel } from "./components/EditorPanel";
 import { Settings } from "./components/Settings";
 import { Legend } from "./components/Legend";
@@ -114,6 +115,7 @@ export default function App() {
     createScenario,
     addAccount,
     addTransfer,
+    addTransferAt,
     selectItem,
     undo,
     redo,
@@ -125,6 +127,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showRealValues, setShowRealValues] = useState(true);
   const [showAddTransfer, setShowAddTransfer] = useState(false);
+  const [dragCreateInfo, setDragCreateInfo] = useState<DragCreateInfo | null>(null);
   const [visibleAccounts, setVisibleAccounts] = useState<Set<string>>(new Set());
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [hoveredAnchorId, setHoveredAnchorId] = useState<string | null>(null);
@@ -589,6 +592,7 @@ export default function App() {
               viewportStart={safeViewportStart}
               viewportEnd={safeViewportEnd}
               onSelectItem={(id, type) => selectItem(id, type)}
+              onDragCreate={(info) => setDragCreateInfo(info)}
               hoveredIdx={hoveredIdx}
               onHoverIdx={setHoveredIdx}
               hoveredAnchorId={hoveredAnchorId}
@@ -607,14 +611,20 @@ export default function App() {
       {showSettings && <Settings onClose={() => setShowSettings(false)} />}
 
       {/* Add Transfer modal */}
-      {showAddTransfer && (
+      {(showAddTransfer || dragCreateInfo) && (
         <AddTransferModal
           accounts={scenario.accounts}
+          initialSrcId={dragCreateInfo ? dragCreateInfo.sourceAccountId : undefined}
           onConfirm={(srcId, tgtId) => {
-            addTransfer(srcId, tgtId);
-            setShowAddTransfer(false);
+            if (dragCreateInfo) {
+              addTransferAt(srcId, dragCreateInfo.startDate, dragCreateInfo.endDate, dragCreateInfo.startAnchorId, dragCreateInfo.endAnchorId, tgtId);
+              setDragCreateInfo(null);
+            } else {
+              addTransfer(srcId, tgtId);
+              setShowAddTransfer(false);
+            }
           }}
-          onClose={() => setShowAddTransfer(false)}
+          onClose={() => { setShowAddTransfer(false); setDragCreateInfo(null); }}
         />
       )}
     </div>
@@ -623,14 +633,16 @@ export default function App() {
 
 function AddTransferModal({
   accounts,
+  initialSrcId,
   onConfirm,
   onClose,
 }: {
   accounts: Account[];
+  initialSrcId?: string | null;
   onConfirm: (srcId: string | null, tgtId: string | null) => void;
   onClose: () => void;
 }) {
-  const [srcId, setSrcId] = useState<string>(accounts[0]?.id ?? "");
+  const [srcId, setSrcId] = useState<string>(initialSrcId !== undefined ? (initialSrcId ?? "") : (accounts[0]?.id ?? ""));
   const [tgtId, setTgtId] = useState<string>(accounts[0]?.id ?? "");
 
   return (
