@@ -133,8 +133,11 @@ export default function App() {
   const [hoveredAnchorId, setHoveredAnchorId] = useState<string | null>(null);
   const [viewportStart, setViewportStart] = useState(0);
   const [viewportEnd, setViewportEnd] = useState(0);
+  const [chartHeight, setChartHeight] = useState<number | null>(null);
   const chartAreaRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const chartDivRef = useRef<HTMLDivElement>(null);
+  const dividerDragRef = useRef<{ startY: number; startH: number } | null>(null);
   const vpRef = useRef({ start: 0, end: 0, total: 1 });
   const panAccRef = useRef(0);
   const zoomWidthRef = useRef<number | null>(null);
@@ -469,7 +472,11 @@ export default function App() {
           </div>
 
           {/* Chart */}
-          <div className="flex-1 p-2" style={{ minHeight: 200 }}>
+          <div
+            ref={chartDivRef}
+            className={chartHeight == null ? "flex-1 p-2" : "flex-shrink-0 p-2"}
+            style={{ minHeight: 300, ...(chartHeight != null ? { height: chartHeight } : {}) }}
+          >
             <Chart
               result={simulationResult}
               accounts={scenario.accounts}
@@ -579,10 +586,32 @@ export default function App() {
             );
           })()}
 
+          {/* Divider */}
+          <div
+            className="flex-shrink-0 h-1.5 cursor-row-resize bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              const startH = chartDivRef.current?.getBoundingClientRect().height ?? chartHeight ?? 300;
+              dividerDragRef.current = { startY: e.clientY, startH };
+              const onMove = (ev: MouseEvent) => {
+                if (!dividerDragRef.current) return;
+                const delta = ev.clientY - dividerDragRef.current.startY;
+                setChartHeight(Math.max(300, dividerDragRef.current.startH + delta));
+              };
+              const onUp = () => {
+                dividerDragRef.current = null;
+                window.removeEventListener("mousemove", onMove);
+                window.removeEventListener("mouseup", onUp);
+              };
+              window.addEventListener("mousemove", onMove);
+              window.addEventListener("mouseup", onUp);
+            }}
+          />
+
           {/* Timeline */}
           <div
             ref={timelineRef}
-            className="border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-2"
+            className="bg-white dark:bg-zinc-900 py-2"
             style={{ minHeight: 80, overflowY: "auto", paddingLeft: CHART_MARGIN.left + 8, paddingRight: CHART_MARGIN.right + 8 }}
           >
             <Timeline
