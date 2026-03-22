@@ -52,6 +52,7 @@ export interface Scenario {
   inflationEnabled: boolean;
   currencyLocale: string;
   currencySymbol: string;
+  currencySymbolPosition?: "before" | "after";
   accounts: Account[];
   transfers: Transfer[];
   anchors?: TimeAnchor[];

@@ -35,6 +35,9 @@ export function AccountEditor({ account }: Props) {
   const currencyCode = useScenarioStore(s =>
     s.activeScenarioId ? (s.scenarios[s.activeScenarioId]?.currencySymbol ?? "USD") : "USD"
   );
+  const symbolPosition = useScenarioStore(s =>
+    s.activeScenarioId ? (s.scenarios[s.activeScenarioId]?.currencySymbolPosition ?? "before") : "before"
+  );
 
   const update = useCallback(<K extends keyof Account>(key: K, value: Account[K]) => {
     updateAccount(account.id, { [key]: value });
@@ -109,6 +112,7 @@ export function AccountEditor({ account }: Props) {
             value={account.initialBalance}
             locale={currencyLocale}
             currencyCode={currencyCode}
+            symbolPosition={symbolPosition}
             onChange={v => update("initialBalance", v)}
             className="input flex-1"
           />

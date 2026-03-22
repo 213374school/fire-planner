@@ -37,6 +37,9 @@ export function TransferEditor({ transfer, accounts }: Props) {
   const currencyCode = useScenarioStore(
     s => s.activeScenarioId ? (s.scenarios[s.activeScenarioId]?.currencySymbol ?? "USD") : "USD"
   );
+  const symbolPosition = useScenarioStore(
+    s => s.activeScenarioId ? (s.scenarios[s.activeScenarioId]?.currencySymbolPosition ?? "before") : "before"
+  );
   const timelineStart = useScenarioStore(
     s => s.activeScenarioId ? (s.scenarios[s.activeScenarioId]?.timelineStart ?? "") : ""
   );
@@ -193,6 +196,7 @@ export function TransferEditor({ transfer, accounts }: Props) {
                 value={transfer.amount}
                 locale={currencyLocale}
                 currencyCode={currencyCode}
+                symbolPosition={symbolPosition}
                 onChange={v => update("amount", v)}
                 className="input flex-1"
               />

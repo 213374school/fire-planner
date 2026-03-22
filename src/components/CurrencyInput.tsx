@@ -4,25 +4,17 @@ interface Props {
   value: number;
   locale: string;
   currencyCode: string;
+  symbolPosition?: "before" | "after";
   onChange: (v: number) => void;
   className?: string;
 }
 
-export function CurrencyInput({ value, locale, currencyCode, onChange, className }: Props) {
+export function CurrencyInput({ value, locale, currencyCode, symbolPosition = "before", onChange, className }: Props) {
   const [focused, setFocused] = useState(false);
   const [raw, setRaw] = useState("");
 
-  let formatted: string;
-  try {
-    formatted = new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency: currencyCode,
-      currencyDisplay: "code",
-      maximumFractionDigits: 0,
-    }).format(value);
-  } catch {
-    formatted = `${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value)} ${currencyCode}`;
-  }
+  const num = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
+  const formatted = symbolPosition === "after" ? `${num} ${currencyCode}` : `${currencyCode}${num}`;
 
   return (
     <input

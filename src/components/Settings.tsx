@@ -161,6 +161,17 @@ export function Settings({ onClose }: Props) {
             <input type="text" value={scenario.currencyLocale} onChange={e => updateScenario({ currencyLocale: e.target.value })} className="input" />
           </Field>
         </div>
+        <div>
+          <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={(scenario.currencySymbolPosition ?? "before") === "after"}
+              onChange={e => updateScenario({ currencySymbolPosition: e.target.checked ? "after" : "before" })}
+              className="accent-violet-600"
+            />
+            Show currency symbol after amount
+          </label>
+        </div>
 
         <div className="flex gap-2 pt-2">
           <button onClick={handleExport} className="btn-secondary flex-1 justify-center">Export JSON</button>

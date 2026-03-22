@@ -181,6 +181,7 @@ export function makeDefaultScenario(): Scenario {
     inflationEnabled: true,
     currencyLocale: "en-US",
     currencySymbol: "$",
+    currencySymbolPosition: "before",
     accounts,
     transfers,
     anchors,
