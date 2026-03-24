@@ -1,4 +1,4 @@
-import type { Scenario, TimeAnchor } from "../types";
+import type { Account, Scenario, TimeAnchor, Transfer } from "../types";
 
 export const ACCOUNT_COLORS = [
   "#4f46e5", "#0891b2", "#059669", "#d97706",

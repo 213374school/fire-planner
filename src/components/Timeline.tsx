@@ -1,5 +1,5 @@
 import { useRef, useCallback, useState } from "react";
-import type { Transfer, Scenario, TimeAnchor } from "../types";
+import type { Account, Transfer, Scenario, TimeAnchor } from "../types";
 import { useScenarioStore } from "../store/scenario";
 import {
   findAnchorForEdge,
@@ -210,8 +210,8 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
         if (el) { el.classList.add("anchor-candidate-highlight"); highlightedAnchorEl = el; }
       }
 
-      const accountUpdates: { id: string; changes: Partial<import("../types").Account> }[] = [];
-      const transferUpdates: { id: string; changes: Partial<import("../types").Transfer> }[] = [];
+      const accountUpdates: { id: string; changes: Partial<Account> }[] = [];
+      const transferUpdates: { id: string; changes: Partial<Transfer> }[] = [];
 
       for (const edge of anchor.edges) {
         const acc = scenario.accounts.find(a => a.id === edge.itemId);
@@ -357,8 +357,8 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
         // --- Apply single-item update ---
         const clampedDate = computeEdgeDragTargetSimple(scenario, id, draggedEdge, candidateDate);
         lastClampedDate = clampedDate;
-        const accountUpdates: { id: string; changes: Partial<import("../types").Account> }[] = [];
-        const transferUpdates: { id: string; changes: Partial<import("../types").Transfer> }[] = [];
+        const accountUpdates: { id: string; changes: Partial<Account> }[] = [];
+        const transferUpdates: { id: string; changes: Partial<Transfer> }[] = [];
 
         // When clamped to a timeline boundary, clear the date to null
         const atBoundary = draggedEdge === "start"
@@ -414,8 +414,8 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
         }
         lastBodyDelta = delta;
 
-        const accountUpdates: { id: string; changes: Partial<import("../types").Account> }[] = [];
-        const transferUpdates: { id: string; changes: Partial<import("../types").Transfer> }[] = [];
+        const accountUpdates: { id: string; changes: Partial<Account> }[] = [];
+        const transferUpdates: { id: string; changes: Partial<Transfer> }[] = [];
 
         if (type === "account") {
           // accounts are omnipresent — nothing to drag
@@ -423,7 +423,7 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
           const t = scenario.transfers.find(t => t.id === id);
           if (t) {
             const newStart = addMonths(resolveEdgeDate(scenario, id, "start"), delta);
-            const changes: Partial<import("../types").Transfer> = {};
+            const changes: Partial<Transfer> = {};
             // Only concretize null startDate when actually moving; keep null when delta=0
             // Also clear startDate if dragged back to timeline start
             if (t.startDate !== null || delta !== 0) {
@@ -748,7 +748,7 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
 
   // Precomputed data for row reorder drag
   const externalTransfersOrdered = scenario.transfers.filter(t => t.sourceAccountId === null);
-  const accountTransfersOrdered: Record<string, import("../types").Transfer[]> = {};
+  const accountTransfersOrdered: Record<string, Transfer[]> = {};
   for (const acc of scenario.accounts) {
     accountTransfersOrdered[acc.id] = scenario.transfers.filter(t => t.sourceAccountId === acc.id);
   }
@@ -758,14 +758,14 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
   }
   const accountLaneTops = scenario.accounts.map(acc => laneTopPx(accountLaneMap[acc.id]));
 
-  function sortByVisualY(group: import("../types").Transfer[]): import("../types").Transfer[] {
+  function sortByVisualY(group: Transfer[]): Transfer[] {
     return [...group].sort((a, b) => {
       const yDiff = (transferLaneY[a.id] ?? 0) - (transferLaneY[b.id] ?? 0);
       return yDiff !== 0 ? yDiff : group.indexOf(a) - group.indexOf(b);
     });
   }
   const sortedExternalGroup = sortByVisualY(externalTransfersOrdered);
-  const sortedTransferGroups: Record<string, import("../types").Transfer[]> = {};
+  const sortedTransferGroups: Record<string, Transfer[]> = {};
   for (const acc of scenario.accounts) {
     sortedTransferGroups[acc.id] = sortByVisualY(accountTransfersOrdered[acc.id] ?? []);
   }

@@ -175,13 +175,13 @@ export function Chart({ result, accounts, scenario, visibleAccounts, viewportSta
     // Year/quarter mode: crosshair centered in the aggregated bar.
     const absIdxToX = new Map<number, number>();
     if (barMode === "year") {
-      barData.forEach((d, i) => {
+      barData.forEach((_d, i) => {
         for (const m of months.filter(m => m.startsWith(barLabels[i]))) {
           absIdxToX.set(result.months.indexOf(m), barCenter(i));
         }
       });
     } else if (barMode === "quarter") {
-      barData.forEach((d, i) => {
+      barData.forEach((_d, i) => {
         for (const m of months.filter(m => quarterKey(m) === barLabels[i])) {
           absIdxToX.set(result.months.indexOf(m), barCenter(i));
         }
@@ -483,7 +483,6 @@ export function Chart({ result, accounts, scenario, visibleAccounts, viewportSta
   }, [result, accounts, visibleAccounts, viewportStart, viewportEnd, scenario, onHoverIdx, selectedItemId, onSelectItem, showRealValues, containerSize]);
 
   // Read layout ref once per render for crosshair positioning (set by D3 effect, safe to read here)
-  // eslint-disable-next-line react-hooks/refs
   const layout = layoutRef.current;
   const crosshairX = (() => {
     if (hoveredIdx === null || hoveredAnchorId !== null || !layout) return null;

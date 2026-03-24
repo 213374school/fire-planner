@@ -51,8 +51,6 @@ interface ScenarioStore {
 
   importScenario: (scenario: Scenario) => void;
 
-  rerunSimulation: () => void;
-
   reorderAccount: (fromIndex: number, insertAtGap: number) => void;
   reorderTransferInGroup: (draggedId: string, insertBeforeId: string | null) => void;
 
@@ -205,6 +203,7 @@ export const useScenarioStore = create<ScenarioStore>()(
       selectedItemType: null,
       _undoStack: [],
       _redoStack: [],
+
 
       captureHistorySnapshot: () => {
         set(state => ({
@@ -524,12 +523,6 @@ export const useScenarioStore = create<ScenarioStore>()(
             simulationResult: recompute(scenarios, scenario.id),
           };
         });
-      },
-
-      rerunSimulation: () => {
-        set(state => ({
-          simulationResult: recompute(state.scenarios, state.activeScenarioId),
-        }));
       },
 
       reorderAccount: (fromIndex, insertAtGap) => {

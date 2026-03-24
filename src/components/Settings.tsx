@@ -23,7 +23,7 @@ function padDate(s: unknown): unknown {
   return s.replace(/^(\d{4})-(\d)$/, (_, y, m) => `${y}-0${m}`);
 }
 function padDates(data: Record<string, unknown>) {
-  for (const key of ["timelineStart", "timelineEnd", "createdAt", "updatedAt"]) {
+  for (const key of ["timelineStart", "timelineEnd"]) {
     data[key] = padDate(data[key]);
   }
   for (const t of (data.transfers ?? []) as Record<string, unknown>[]) {
