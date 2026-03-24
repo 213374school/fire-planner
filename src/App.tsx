@@ -28,10 +28,12 @@ function useTheme(): [Theme, () => void] {
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
+const FLAME_PATH = "M6.5 0.5C6.5 0.5 10 5 10 8C10 10.5 8.5 12.5 6.5 12.5C4.5 12.5 3 10.5 3 8C3 6.5 3.8 5.2 5 4.2C4.9 5.4 5.5 6.5 6.2 7.1C6.1 5 6.3 2.2 6.5 0.5Z";
+
 function FlameIcon() {
   return (
     <svg width="13" height="15" viewBox="0 0 13 15" fill="currentColor" className="text-white">
-      <path d="M6.5 0.5C6.5 0.5 10 5 10 8C10 10.5 8.5 12.5 6.5 12.5C4.5 12.5 3 10.5 3 8C3 6.5 3.8 5.2 5 4.2C4.9 5.4 5.5 6.5 6.2 7.1C6.1 5 6.3 2.2 6.5 0.5Z"/>
+      <path d={FLAME_PATH}/>
     </svg>
   );
 }
