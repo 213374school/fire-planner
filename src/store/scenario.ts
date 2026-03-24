@@ -27,6 +27,8 @@ interface ScenarioStore {
   // History
   _undoStack: HistorySnapshot[];
   _redoStack: HistorySnapshot[];
+  canUndo: boolean;
+  canRedo: boolean;
   undo: () => void;
   redo: () => void;
   captureHistorySnapshot: () => void;
@@ -190,6 +192,8 @@ function withHistory(state: ScenarioStore) {
   return {
     _undoStack: [...state._undoStack, captureSnapshot(state)].slice(-HISTORY_LIMIT),
     _redoStack: [] as HistorySnapshot[],
+    canUndo: true,
+    canRedo: false,
   };
 }
 
@@ -203,12 +207,16 @@ export const useScenarioStore = create<ScenarioStore>()(
       selectedItemType: null,
       _undoStack: [],
       _redoStack: [],
+      canUndo: false,
+      canRedo: false,
 
 
       captureHistorySnapshot: () => {
         set(state => ({
           _undoStack: [...state._undoStack, captureSnapshot(state)].slice(-HISTORY_LIMIT),
           _redoStack: [],
+          canUndo: true,
+          canRedo: false,
         }));
       },
 
@@ -216,12 +224,15 @@ export const useScenarioStore = create<ScenarioStore>()(
         set(state => {
           if (state._undoStack.length === 0) return state;
           const prev = state._undoStack[state._undoStack.length - 1];
+          const newUndoStack = state._undoStack.slice(0, -1);
           return {
             scenarios: prev.scenarios,
             activeScenarioId: prev.activeScenarioId,
             simulationResult: recompute(prev.scenarios, prev.activeScenarioId),
-            _undoStack: state._undoStack.slice(0, -1),
+            _undoStack: newUndoStack,
             _redoStack: [...state._redoStack, captureSnapshot(state)],
+            canUndo: newUndoStack.length > 0,
+            canRedo: true,
           };
         });
       },
@@ -230,12 +241,15 @@ export const useScenarioStore = create<ScenarioStore>()(
         set(state => {
           if (state._redoStack.length === 0) return state;
           const next = state._redoStack[state._redoStack.length - 1];
+          const newRedoStack = state._redoStack.slice(0, -1);
           return {
             scenarios: next.scenarios,
             activeScenarioId: next.activeScenarioId,
             simulationResult: recompute(next.scenarios, next.activeScenarioId),
             _undoStack: [...state._undoStack, captureSnapshot(state)],
-            _redoStack: state._redoStack.slice(0, -1),
+            _redoStack: newRedoStack,
+            canUndo: true,
+            canRedo: newRedoStack.length > 0,
           };
         });
       },

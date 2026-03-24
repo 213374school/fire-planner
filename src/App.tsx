@@ -119,8 +119,8 @@ export default function App() {
     selectItem,
     undo,
     redo,
-    _undoStack,
-    _redoStack,
+    canUndo,
+    canRedo,
   } = useScenarioStore();
 
   const [theme, toggleTheme] = useTheme();
@@ -412,13 +412,13 @@ export default function App() {
         <div className="flex items-center gap-0.5">
           <button
             onClick={undo}
-            disabled={_undoStack.length === 0}
+            disabled={!canUndo}
             className="btn-icon disabled:opacity-30"
             title="Undo (Ctrl+Z)"
           ><UndoIcon /></button>
           <button
             onClick={redo}
-            disabled={_redoStack.length === 0}
+            disabled={!canRedo}
             className="btn-icon disabled:opacity-30"
             title="Redo (Ctrl+Shift+Z)"
           ><RedoIcon /></button>
@@ -555,7 +555,7 @@ export default function App() {
                     className="absolute -translate-x-1/2 pointer-events-none"
                     style={{ left: `${cursorPct}%`, top: 2, fontSize: 10, whiteSpace: "nowrap", color: "var(--anchor-label)" }}
                   >
-                    {monthToLabel(cursorDate)}
+                    {monthToLabel(cursorDate, scenario?.currencyLocale)}
                   </div>
                 )}
                 {positioned.map(({ anchor, pct }) => {
@@ -576,7 +576,7 @@ export default function App() {
                           : "var(--anchor-label)",
                       }}
                     >
-                      {monthToLabel(addMonths(anchor.date, 1))}
+                      {monthToLabel(addMonths(anchor.date, 1), scenario?.currencyLocale)}
                     </div>
                   );
                 })}

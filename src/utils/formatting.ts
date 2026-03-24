@@ -12,8 +12,8 @@ export function formatCurrency(value: number, symbol: string, symbolPosition: "b
   return symbolPosition === "after" ? `${sign}${number} ${symbol}` : `${sign}${symbol}${number}`;
 }
 
-export function monthToLabel(month: string): string {
+export function monthToLabel(month: string, locale = "en-US"): string {
   const [y, m] = month.split("-").map(Number);
   const date = new Date(y, m - 1, 1);
-  return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  return date.toLocaleDateString(locale, { month: "short", year: "numeric" });
 }

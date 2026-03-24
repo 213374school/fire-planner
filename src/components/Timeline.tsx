@@ -1252,7 +1252,7 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
             }}
           >
             <div className="font-medium mb-0.5">{acc.name}</div>
-            <div className="text-gray-500 dark:text-gray-500 text-[10px] mb-1">{monthToLabel(monthStr)}</div>
+            <div className="text-gray-500 dark:text-gray-500 text-[10px] mb-1">{monthToLabel(monthStr, scenario.currencyLocale)}</div>
             {inflationOn ? (
               <>
                 <div>Nominal: {formatCurrency(balance, sym, symPos)}</div>
@@ -1332,7 +1332,7 @@ export function Timeline({ scenario, selectedItemId, selectedItemType, viewportS
             }}
           >
             <div className="font-medium mb-0.5">{t.name}</div>
-            <div className="text-gray-500 dark:text-gray-500 text-[10px] mb-1">{monthToLabel(monthStr)}</div>
+            <div className="text-gray-500 dark:text-gray-500 text-[10px] mb-1">{monthToLabel(monthStr, scenario.currencyLocale)}</div>
             {lines.map((line, i) => <div key={i}>{line}</div>)}
             {inflationOn && t.amountType === "fixed" && (
               <div className="text-gray-400 dark:text-gray-500 text-[10px] mt-1">

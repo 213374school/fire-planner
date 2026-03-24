@@ -117,6 +117,7 @@ function validateTimeAnchor(data: unknown, itemIds: Set<string>): ValidationResu
 }
 
 function isValidYYYYMM(s: string): boolean {
-  return /^\d{4}-\d{2}$/.test(s);
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(s)) return false;
+  return true;
 }
 
